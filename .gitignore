@@ -1,0 +1,30 @@
+# 2026-03-18 신규: macOS가 자동 생성하는 메타 파일은 버전 관리에서 제외
+.DS_Store
+
+# 2026-03-18 신규: 로컬에서만 사용하는 실제 환경변수 파일은 제외
+.env
+.env.local
+.env.*.local
+backend/.env
+backend/.env.local
+frontend/.env
+frontend/.env.local
+
+# 2026-03-18 신규: 업로드 테스트로 생기는 로컬 파일은 제외
+backend/uploads/
+
+# 2026-03-18 신규: Next 개발 중 생성한 백업 캐시는 제외
+frontend/.next_backup_*/
+.next_backup_*/
+**/.next_backup_*/
+
+# 2026-03-18 신규: 개인 문서 및 발표 자료는 저장소에서 제외
+*.pptx
+*.xlsx
+*.png
+ERD.png
+project.txt
+project_v7.txt
+
+# 2026-03-18 신규: 로그 파일은 로컬 산출물이므로 제외
+*.log
