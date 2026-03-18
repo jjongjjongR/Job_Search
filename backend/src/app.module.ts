@@ -1,60 +1,41 @@
 import { Module } from '@nestjs/common';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { ConfigModule } from '@nestjs/config';
-
-// App 기본
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-
-// 기능 모듈
+import configuration from './config/configuration';
+import { validateEnv } from './config/env.validation';
+import { getTypeOrmConfig } from './database/typeorm.config';
+import { AuthModule } from './auth/auth.module';
+import { UsersModule } from './users/users.module';
 import { PostModule } from './post/post.module';
 import { CommentModule } from './post/comment/comment.module';
 import { FilesModule } from './files/files.module';
 import { DataroomModule } from './dataroom/dataroom.module';
-import { FeedbackModule } from './feedback/feedback.module';
-import { InterviewModule } from './interview/interview.module';
-
-// 엔티티
-import { Post } from './post/entities/post.entity';
-import { Comment } from './post/comment/entities/comment.entity';
-import { Dataroom } from './dataroom/entities/dataroom.entity';
-import { FileEntity } from './files/entities/file.entity';
-
-// (선택) 테스트용 컨트롤러 추가 시 import
-import { TestController } from './test/test.controller';
+import { AiClientModule } from './ai-client/ai-client.module';
 
 @Module({
   imports: [
-    // .env 설정 (가장 먼저)
     ConfigModule.forRoot({
-      envFilePath: '.env',
       isGlobal: true,
+      envFilePath: ['.env.local', '.env'],
+      load: [configuration],
+      validate: validateEnv,
     }),
-
-    // DB 연결
-    TypeOrmModule.forRoot({
-      type: 'postgres',
-      host: 'localhost',
-      port: 5432,
-      username: 'myuser',
-      password: 'mypassword',
-      database: 'myproject',
-      entities: [Post, Comment, Dataroom, FileEntity],
-      synchronize: true, // 운영에서는 false로!
+    TypeOrmModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService) =>
+        getTypeOrmConfig(configService),
     }),
-
-    // 기능 모듈 등록
+    AuthModule,
+    UsersModule,
     PostModule,
     CommentModule,
     FilesModule,
     DataroomModule,
-    FeedbackModule,
-    InterviewModule,
+    AiClientModule,
   ],
-  controllers: [
-    AppController,
-    TestController, // (테스트용 컨트롤러 등록 시)
-  ],
+  controllers: [AppController],
   providers: [AppService],
 })
 export class AppModule {}

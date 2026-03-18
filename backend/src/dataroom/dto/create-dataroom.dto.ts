@@ -1,6 +1,7 @@
 // backend/src/dataroom/dto/create-dataroom.dto.ts
 
-import { IsString, IsNotEmpty } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional } from 'class-validator';
+import { IsNumber } from 'class-validator';
 
 export class CreateDataroomDto {
   @IsString()
@@ -12,6 +13,9 @@ export class CreateDataroomDto {
   description: string;
 
   @IsString()
-  @IsNotEmpty()
+  @IsOptional()
   uploader: string;
+
+  @IsNumber()
+  fileId: number;
 }

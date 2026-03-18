@@ -1,13 +1,13 @@
 // src/post/comment/dto/create-comment.dto.ts
 
-import { IsNotEmpty, IsString, IsNumber } from 'class-validator';
+import { IsNotEmpty, IsString, IsNumber, IsOptional } from 'class-validator';
 
 export class CreateCommentDto {
   @IsNumber()
   postId: number;
 
   @IsString()
-  @IsNotEmpty()
+  @IsOptional()
   author: string;
 
   @IsString()

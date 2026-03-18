@@ -1,118 +1,59 @@
-"use client";
+'use client';
 
-import { useRef, useState, useEffect } from "react";
-import axios from "axios";
+import { FeatureShell } from '@/components/feature-shell';
+
+const interviewSteps = [
+  '첫 질문은 고정 자기소개로 시작',
+  'NestJS 인증 후 내부 FastAPI로 세션 시작 요청',
+  'LangGraph가 topic queue와 follow-up 제한 관리',
+  'STT / Vision / TTS는 도구로만 사용',
+  '최종 결과만 사용자에게 반환',
+];
 
 export default function InterviewPage() {
-  const [history, setHistory] = useState<{ role: "user" | "assistant"; content: string }[]>([]);
-  const [input, setInput] = useState("");
-  const [loading, setLoading] = useState(false);
-
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-
-  // 엔터키 입력 시 전송 처리
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
-    }
-  };
-
-  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setInput(e.target.value);
-
-    // 높이 자동 조절
-    if (textareaRef.current) {
-      textareaRef.current.style.height = "auto"; // 높이 초기화
-      textareaRef.current.style.height = textareaRef.current.scrollHeight + "px"; // 내용에 맞춰 조절
-    }
-  };
-
-  const handleSend = async () => {
-    if (!input.trim()) return;
-
-    // 사용자의 입력을 history에 추가
-    const newHistory = [...history, { role: "user" as "user", content: input }];
-    setHistory(newHistory);
-
-    setLoading(true);
-    try {
-      const res = await axios.post<{ reply: string; feedback: string | null }>(
-        `${process.env.NEXT_PUBLIC_API_URL}/interview/next`,
-        { history: newHistory }
-      );
-
-      // 피드백이 있으면 추가
-      if (res.data.feedback) {
-        setHistory((prev) => [...prev, { role: "assistant", content: `📝 피드백: ${res.data.feedback}` }]);
-      }
-
-      // AI 면접관 답변 추가
-      setHistory((prev) => [...prev, { role: "assistant", content: res.data.reply }]);
-
-    } catch (e) {
-      alert("에러가 발생했습니다.");
-    } finally {
-      setLoading(false);
-    }
-
-    setInput(""); // 입력란 초기화
-  };
-
   return (
-    <main className="max-w-3xl mx-auto p-6 bg-gray-50 min-h-screen flex flex-col">
-      <h1 className="text-3xl font-extrabold mb-6 text-gray-900 select-none">AI 면접 시뮬레이션</h1>
-
-      <div
-        ref={scrollRef}
-        className="overflow-y-auto bg-white rounded-lg shadow-md p-6 mb-4 border border-gray-200"
-        style={{ minHeight: 275, maxHeight: 500 }} // minHeight 축소, maxHeight 추가
-      >
-        {history.length === 0 && (
-          <p className="text-gray-400 italic text-center mt-24 select-none">
-            질문이나 답변을 입력해 면접을 시작하세요.
-          </p>
-        )}
-
-        {history.map((msg, idx) => (
-          <div
-            key={idx}
-            className={`mb-4 max-w-[80%] px-4 py-3 rounded-lg ${
-              msg.role === "user"
-                ? "ml-auto bg-blue-600 text-white rounded-tr-none"
-                : "mr-auto bg-gray-200 text-gray-800 rounded-bl-none"
-            }`}
-          >
-            <span className="whitespace-pre-wrap">{msg.content}</span>
+    <FeatureShell
+      eyebrow="AI Interview"
+      title="면접 멀티 에이전트 영역은 내부 전용 아키텍처 기준으로 준비 중입니다"
+      description="사용자는 Next.js와 NestJS만 보게 하고, FastAPI와 LangGraph는 내부 오케스트레이션 서버로 동작시키는 방향을 유지합니다."
+    >
+      <div className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
+        <div className="rounded-[28px] bg-white p-8 shadow-[0_18px_50px_rgba(16,36,61,0.07)]">
+          <h2 className="text-2xl font-bold">면접 세션 설계 요약</h2>
+          <div className="mt-5 grid gap-3">
+            {interviewSteps.map((step, index) => (
+              <div
+                key={step}
+                className="grid grid-cols-[44px_1fr] items-start gap-4 rounded-2xl border border-[var(--border-soft)] bg-[var(--card-soft)] px-4 py-4"
+              >
+                <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[var(--accent)] font-bold text-white">
+                  {index + 1}
+                </div>
+                <p className="pt-2 text-sm leading-6 text-[var(--text-muted)]">{step}</p>
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
+        </div>
 
-      <div className="flex gap-3">
-        <textarea
-          ref={textareaRef}
-          rows={1}
-          className="flex-1 border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 transition resize-none"
-          placeholder="답변 입력 후 Enter"
-          value={input}
-          onChange={handleInputChange}
-          onKeyDown={handleKeyDown}
-          disabled={loading}
-          spellCheck={false}
-          autoComplete="off"
-        />
-        <button
-          className={`flex items-center justify-center gap-3 bg-blue-600 hover:bg-blue-700
-                      text-white font-semibold px-6 py-3 rounded-2xl shadow-lg transition
-                      disabled:bg-blue-600 disabled:hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed`}
-          onClick={handleSend}
-          disabled={loading || !input.trim()}
-          aria-label="전송"
-        >
-          {loading ? "전송 중..." : "전송"}
-        </button>
+        <div className="space-y-4">
+          <div className="rounded-[28px] bg-[var(--card-strong)] p-7 text-white">
+            <h2 className="text-xl font-bold">내부 보호 원칙</h2>
+            <ul className="mt-4 space-y-3 text-sm leading-6 text-white/78">
+              <li>FastAPI는 외부 공개 API가 아닙니다.</li>
+              <li>JWT 검증은 NestJS에서만 처리합니다.</li>
+              <li>Vision은 감정 분석이 아니라 관찰 가능한 신호만 사용합니다.</li>
+              <li>세션 종료 후 임시 데이터는 TTL 정책으로 정리합니다.</li>
+            </ul>
+          </div>
+
+          <div className="rounded-[28px] border border-[var(--border-soft)] bg-white p-7">
+            <h2 className="text-xl font-bold">준비된 환경변수 묶음</h2>
+            <p className="mt-3 text-sm leading-6 text-[var(--text-muted)]">
+              Redis, storage, internal shared secret, tool provider, 파일 제한 정책까지 AI 서버용 예시 값을 미리 준비했습니다.
+            </p>
+          </div>
+        </div>
       </div>
-    </main>
+    </FeatureShell>
   );
 }

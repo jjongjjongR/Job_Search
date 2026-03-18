@@ -1,89 +1,119 @@
-// src/app/dataroom/page.tsx
+'use client';
 
-"use client";
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { FeatureShell } from '@/components/feature-shell';
+import { LoginRequiredCard } from '@/components/login-required-card';
+import { apiRequest } from '@/lib/api';
+import { getStoredUser, type AuthUser } from '@/lib/auth';
+import { isAdmin } from '@/lib/isAdmin';
 
-import { useEffect, useState } from "react";
-import { useSession } from "next-auth/react";
-import { useRouter } from "next/navigation";
-import axios from "axios";
-import { isAdmin } from "@/lib/isAdmin";
-import Link from "next/link";
-
-type FilePost = {
+type DataroomItem = {
   id: number;
   title: string;
+  description: string;
   uploader: string;
-  createdAt: string;
+  file?: {
+    id: number;
+    createdAt: string;
+    originalname: string;
+  };
 };
 
-export default function DataRoom() {
-  const [posts, setPosts] = useState<FilePost[]>([]);
+export default function DataroomPage() {
   const router = useRouter();
-  const { data: session } = useSession();
+  const [items, setItems] = useState<DataroomItem[]>([]);
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const fetchData = async () => {
+    const currentUser = getStoredUser();
+    setUser(currentUser);
+
+    const loadItems = async () => {
+      if (!currentUser) {
+        setIsLoading(false);
+        return;
+      }
+
       try {
-        const res = await axios.get<FilePost[]>("/api/files");
-        setPosts(res.data);
-      } catch (err) {
-        console.error("자료 불러오기 실패", err);
+        const data = await apiRequest<DataroomItem[]>('/dataroom');
+        setItems(data);
+      } finally {
+        setIsLoading(false);
       }
     };
 
-    if (session) {
-      fetchData();
-    }
-  }, [session]);
-
-  // 로그인하지 않은 경우
-  if (!session) {
-    return (
-      <main className="max-w-3xl mx-auto p-6 bg-white shadow-lg rounded-lg">
-        <h1 className="text-2xl font-bold mb-4 text-center">
-        <Link
-          href="http://localhost:3000/api/auth/signin" // 로그인 경로에 맞게 수정
-          className="text-blue-700 hover:underline"
-        >
-          로그인
-        </Link>
-        이 필요합니다.
-      </h1>
-        <p className="text-center">로그인 후 자료실을 이용할 수 있습니다.</p>
-      </main>
-    );
-  }
+    void loadItems();
+  }, []);
 
   return (
-    <main className="max-w-3xl mx-auto p-6 bg-white shadow-lg rounded-lg">
-      <h1 className="text-2xl font-bold mb-4 text-center">자료실</h1>
-
-      {isAdmin(session) && (
-        <div className="flex justify-end mb-4">
-          <button
-            onClick={() => router.push("/dataroom/new")}
-            className="px-4 py-2 bg-blue-500 text-white rounded-lg shadow-md hover:bg-blue-600 transition"
-          >
-            자료 업로드
-          </button>
-        </div>
-      )}
-
-      <ul className="space-y-4">
-        {posts.map((post) => (
-          <li
-            key={post.id}
-            className="p-4 border border-gray-200 rounded-lg hover:bg-gray-100 cursor-pointer transition"
-            onClick={() => router.push(`/dataroom/${post.id}`)}
-          >
-            <h2 className="text-lg font-semibold">{post.title}</h2>
-            <p className="text-sm text-gray-600">
-              업로더: {post.uploader} |{" "}
-              {new Date(post.createdAt).toLocaleDateString()}
+    <FeatureShell
+      eyebrow="Dataroom"
+      title="자료실"
+      description="업로드된 파일 자료를 보고 바로 다운로드할 수 있습니다."
+    >
+      {!user ? (
+        <LoginRequiredCard
+          title="자료실은 로그인한 회원만 볼 수 있습니다"
+          description="자료 목록, 설명, 다운로드 링크는 회원 전용입니다. 로그인 후 자료를 확인해 주세요."
+        />
+      ) : (
+      <div className="space-y-6">
+        <div className="flex flex-col gap-4 rounded-[28px] bg-white p-6 shadow-[0_18px_50px_rgba(16,36,61,0.07)] sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-xl font-bold">공유 자료 목록</h2>
+            <p className="mt-2 text-sm text-[var(--text-muted)]">
+              회원은 자료를 열람하고 다운로드할 수 있고, MASTER 계정만 새 자료를 등록할 수 있습니다.
             </p>
-          </li>
-        ))}
-      </ul>
-    </main>
+          </div>
+          {isAdmin(user) ? (
+            <button
+              onClick={() => router.push('/dataroom/new')}
+              className="rounded-full bg-[var(--accent)] px-5 py-3 font-semibold text-white shadow-[0_12px_28px_rgba(30,111,217,0.28)]"
+            >
+              자료 업로드
+            </button>
+          ) : (
+            <div className="rounded-full bg-[var(--card-soft)] px-5 py-3 text-sm font-semibold text-[var(--text-muted)]">
+              일반 회원은 열람과 다운로드만 가능합니다
+            </div>
+          )}
+        </div>
+
+        <div className="grid gap-4">
+          {isLoading ? <p>자료를 불러오는 중...</p> : null}
+          {!isLoading && items.length === 0 ? (
+            <div className="rounded-[28px] border border-[var(--border-soft)] bg-white p-8 text-[var(--text-muted)]">
+              아직 자료가 없습니다.
+            </div>
+          ) : null}
+          {items.map((item) => (
+            <button
+              key={item.id}
+              onClick={() => router.push(`/dataroom/${item.id}`)}
+              className="rounded-[28px] border border-[var(--border-soft)] bg-white p-6 text-left shadow-[0_16px_40px_rgba(16,36,61,0.05)] transition hover:-translate-y-0.5"
+            >
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h3 className="text-xl font-bold">{item.title}</h3>
+                  <p className="mt-2 text-sm text-[var(--text-muted)]">업로더: {item.uploader}</p>
+                </div>
+                <span className="rounded-full bg-[var(--card-soft)] px-3 py-2 text-xs font-semibold text-[var(--accent)]">
+                  자료
+                </span>
+              </div>
+              <p className="mt-4 text-sm leading-6 text-[var(--text-muted)]">{item.description}</p>
+              {item.file?.createdAt ? (
+                <p className="mt-3 text-xs text-[var(--text-muted)]">
+                  업로드일: {new Date(item.file.createdAt).toLocaleDateString()}
+                </p>
+              ) : null}
+            </button>
+          ))}
+        </div>
+      </div>
+      )}
+    </FeatureShell>
   );
 }

@@ -9,7 +9,11 @@ import {
   UploadedFile,
   UseInterceptors,
   Res,
+  UseGuards,
+  BadRequestException,
 } from '@nestjs/common';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { FilesService } from './files.service';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
@@ -18,7 +22,29 @@ import { Response } from 'express';
 import * as path from 'path';
 import * as fs from 'fs';
 import { NotFoundException } from '@nestjs/common';
+import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { JwtUser } from '../auth/interfaces/jwt-user.interface';
+import { assertMaster } from '../common/utils/role.util';
+import {
+  createDownloadDisposition,
+  normalizeOriginalName,
+  sanitizeStoredFilename,
+} from './utils/file-name.util';
 
+const ALLOWED_EXTENSIONS = [
+  '.pdf',
+  '.doc',
+  '.docx',
+  '.ppt',
+  '.pptx',
+  '.zip',
+  '.hwp',
+  '.hwpx',
+];
+
+@ApiTags('files')
+@ApiBearerAuth()
+@UseGuards(JwtAuthGuard)
 @Controller('files')
 export default class FilesController {
   constructor(private readonly filesService: FilesService) {}
@@ -26,10 +52,27 @@ export default class FilesController {
   @Post()
   @UseInterceptors(
     FileInterceptor('file', {
+      limits: {
+        fileSize: 20 * 1024 * 1024,
+      },
+      fileFilter: (_req, file, callback) => {
+        const extension = path
+          .extname(normalizeOriginalName(file.originalname))
+          .toLowerCase();
+        if (!ALLOWED_EXTENSIONS.includes(extension)) {
+          callback(
+            new BadRequestException('허용되지 않은 파일 형식입니다.'),
+            false,
+          );
+          return;
+        }
+
+        callback(null, true);
+      },
       storage: diskStorage({
         destination: './uploads',
         filename: (req, file, cb) => {
-          const filename = `${Date.now()}-${file.originalname}`;
+          const filename = `${Date.now()}-${sanitizeStoredFilename(file.originalname)}`;
           cb(null, filename);
         },
       }),
@@ -38,12 +81,19 @@ export default class FilesController {
   uploadFile(
     @UploadedFile() file: Express.Multer.File,
     @Body() createFileDto: CreateFileDto,
+    @CurrentUser() currentUser: JwtUser,
   ) {
+    assertMaster(currentUser, '파일 업로드');
+
+    if (!file) {
+      throw new BadRequestException('업로드할 파일이 필요합니다.');
+    }
+
     return this.filesService.create({
       title: createFileDto.title,
-      uploader: createFileDto.uploader,
+      uploader: currentUser.displayName,
       filename: file.filename,
-      originalname: file.originalname,
+      originalname: normalizeOriginalName(file.originalname),
     });
   }
 
@@ -60,7 +110,12 @@ export default class FilesController {
     if (!fs.existsSync(filePath)) {
       return res.status(404).send('File not found');
     }
-    return res.download(filePath, file.originalname);
+
+    const downloadName = normalizeOriginalName(file.originalname);
+    res.setHeader('Content-Disposition', createDownloadDisposition(downloadName));
+    res.setHeader('X-File-Name', encodeURIComponent(downloadName));
+
+    return res.sendFile(filePath);
   }
 
   @Get(':id')

@@ -1,86 +1,143 @@
-// src/app/board/page.tsx
+'use client';
 
-"use client";
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { FeatureShell } from '@/components/feature-shell';
+import { LoginRequiredCard } from '@/components/login-required-card';
+import { apiRequest } from '@/lib/api';
+import { getStoredUser, type AuthUser } from '@/lib/auth';
 
-import { useEffect, useState } from "react";
-import axios from "axios";
-import { useRouter } from "next/navigation";
-import { useSession } from "next-auth/react";
-import Link from "next/link";
-
-const api = axios.create({
-  baseURL: "http://localhost:3001",
-});
-
-type Post = {
+type PostItem = {
   id: number;
   title: string;
   author: string;
+  content: string;
+  likes: number;
+  views: number;
+  createdAt: string;
 };
 
-export default function Board() {
-  const [posts, setPosts] = useState<Post[]>([]);
+const SORT_OPTIONS = [
+  { value: 'latest', label: '최신순' },
+  { value: 'likes', label: '좋아요순' },
+  { value: 'views', label: '조회수순' },
+] as const;
+
+export default function BoardPage() {
   const router = useRouter();
-  const { status } = useSession(); // session 제거, status만 사용
-  const { data: session } = useSession();
+  const [posts, setPosts] = useState<PostItem[]>([]);
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [sortBy, setSortBy] =
+    useState<(typeof SORT_OPTIONS)[number]['value']>('latest');
 
   useEffect(() => {
-    async function fetchPosts() {
-      try {
-        const response = await api.get<Post[]>("/posts");
-        setPosts(response.data);
-      } catch (error) {
-        console.error("데이터를 불러오는 데 실패했습니다.", error);
-      }
-    }
-    fetchPosts();
+    const currentUser = getStoredUser();
+    setUser(currentUser);
   }, []);
 
-  if (status === "loading") {
-    return <p className="text-center text-gray-500">로딩 중...</p>;
-  }
+  useEffect(() => {
+    const currentUser = getStoredUser();
+    if (!currentUser) {
+      setIsLoading(false);
+      return;
+    }
 
-  if (!session) {
-    return (
-      <main className="max-w-3xl mx-auto p-6 bg-white shadow-lg rounded-lg">
-        <h1 className="text-2xl font-bold mb-4 text-center">
-          <Link
-            href="http://localhost:3000/api/auth/signin"
-            className="text-blue-700 hover:underline"
-          >
-            로그인
-          </Link>이 필요합니다.
-        </h1>
-        <p className="text-center">로그인 후 게시판을 이용할 수 있습니다.</p>
-      </main>
-    );
-  }
+    const loadPosts = async () => {
+      try {
+        const data = await apiRequest<PostItem[]>(`/posts?sortBy=${sortBy}`);
+        setPosts(data);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    void loadPosts();
+  }, [sortBy]);
 
   return (
-    <main className="max-w-3xl mx-auto p-6 bg-white shadow-lg rounded-lg">
-      <h1 className="text-2xl font-bold mb-4 text-center">게시판</h1>
-
-      <div className="flex justify-end mb-4">
-        <button
-          onClick={() => router.push("/board/new")}
-          className="px-4 py-2 bg-blue-500 text-white rounded-lg shadow-md hover:bg-blue-600 transition"
-        >
-          새 글 작성
-        </button>
-      </div>
-
-      <ul className="space-y-4">
-        {posts.map((post) => (
-          <li
-            key={post.id}
-            className="p-4 border border-gray-200 rounded-lg hover:bg-gray-100 cursor-pointer transition"
-            onClick={() => router.push(`/board/${post.id}`)}
+    <FeatureShell
+      eyebrow="Board"
+      title="커뮤니티 게시판"
+      description="로그인한 사용자는 글과 댓글을 작성할 수 있고, 모든 사용자는 현재 올라온 게시글 목록을 볼 수 있습니다."
+    >
+      {!user ? (
+        <LoginRequiredCard
+          title="게시판은 로그인한 회원만 볼 수 있습니다"
+          description="게시글 목록과 본문, 댓글은 회원 전용 콘텐츠입니다. 로그인 후 전체 내용을 확인해 주세요."
+        />
+      ) : (
+      <div className="space-y-6">
+        <div className="flex flex-col gap-4 rounded-[28px] bg-white p-6 shadow-[0_18px_50px_rgba(16,36,61,0.07)] sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-xl font-bold">최근 게시글</h2>
+            <p className="mt-2 text-sm text-[var(--text-muted)]">
+              면접 준비, 자소서, 취업 정보 같은 내용을 자유롭게 공유할 수 있습니다.
+            </p>
+          </div>
+          <button
+            onClick={() => router.push('/board/new')}
+            className="rounded-full bg-[var(--accent)] px-5 py-3 font-semibold text-white shadow-[0_12px_28px_rgba(30,111,217,0.28)]"
           >
-            <h2 className="text-lg font-semibold">{post.title}</h2>
-            <p className="text-sm text-gray-600">작성자: {post.author}</p>
-          </li>
-        ))}
-      </ul>
-    </main>
+            새 글 작성
+          </button>
+        </div>
+
+        <div className="flex items-center justify-between rounded-[24px] bg-white px-5 py-4 shadow-[0_10px_30px_rgba(16,36,61,0.05)]">
+          <p className="text-sm font-semibold text-[var(--text-muted)]">정렬 기준</p>
+          <div className="flex gap-2">
+            {SORT_OPTIONS.map((option) => (
+              <button
+                key={option.value}
+                onClick={() => setSortBy(option.value)}
+                className={`rounded-full px-4 py-2 text-sm font-semibold ${
+                  sortBy === option.value
+                    ? 'bg-[var(--accent)] text-white'
+                    : 'bg-[var(--card-soft)] text-[var(--text-muted)]'
+                }`}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="grid gap-4">
+          {isLoading ? <p>게시글을 불러오는 중...</p> : null}
+          {!isLoading && posts.length === 0 ? (
+            <div className="rounded-[28px] border border-[var(--border-soft)] bg-white p-8 text-[var(--text-muted)]">
+              아직 게시글이 없습니다. 첫 글을 작성해 보세요.
+            </div>
+          ) : null}
+
+          {posts.map((post) => (
+            <button
+              key={post.id}
+              onClick={() => router.push(`/board/${post.id}`)}
+              className="rounded-[28px] border border-[var(--border-soft)] bg-white p-6 text-left shadow-[0_16px_40px_rgba(16,36,61,0.05)] transition hover:-translate-y-0.5"
+            >
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h3 className="text-xl font-bold">{post.title}</h3>
+                  <p className="mt-2 text-sm text-[var(--text-muted)]">작성자: {post.author}</p>
+                </div>
+                <span className="rounded-full bg-[var(--card-soft)] px-3 py-2 text-xs font-semibold text-[var(--accent)]">
+                  #{post.id}
+                </span>
+              </div>
+              <p className="mt-4 line-clamp-2 text-sm leading-6 text-[var(--text-muted)]">
+                {post.content}
+              </p>
+              <div className="mt-4 flex flex-wrap gap-3 text-xs font-semibold text-[var(--text-muted)]">
+                <span>좋아요 {post.likes}</span>
+                <span>조회수 {post.views}</span>
+                <span>{new Date(post.createdAt).toLocaleDateString()}</span>
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
+      )}
+    </FeatureShell>
   );
 }

@@ -7,6 +7,8 @@ import { Post } from './entities/post.entity';
 import { CreatePostDto } from './dto/create-post.dto';
 import { UpdatePostDto } from './dto/update-post.dto';
 
+export type PostSortBy = 'latest' | 'likes' | 'views';
+
 @Injectable()
 export class PostService {
   constructor(
@@ -21,8 +23,15 @@ export class PostService {
   }
 
   // 모든 게시글 조회
-  async findAll(): Promise<Post[]> {
-    return await this.postRepository.find();
+  async findAll(sortBy: PostSortBy = 'latest'): Promise<Post[]> {
+    const order =
+      sortBy === 'likes'
+        ? { likes: 'DESC' as const, createdAt: 'DESC' as const }
+        : sortBy === 'views'
+          ? { views: 'DESC' as const, createdAt: 'DESC' as const }
+          : { createdAt: 'DESC' as const };
+
+    return this.postRepository.find({ order });
   }
 
   // 특정 게시글 조회 (null 처리 추가)
@@ -30,6 +39,18 @@ export class PostService {
     const post = await this.postRepository.findOneBy({ id });
     if (!post) {
       throw new NotFoundException(`Post with ID ${id} not found`); // Post가 없으면 예외 던지기
+    }
+
+    post.views += 1;
+    await this.postRepository.save(post);
+
+    return post;
+  }
+
+  async findOneWithoutIncrement(id: number): Promise<Post> {
+    const post = await this.postRepository.findOneBy({ id });
+    if (!post) {
+      throw new NotFoundException(`Post with ID ${id} not found`);
     }
     return post;
   }
@@ -44,17 +65,19 @@ export class PostService {
 
   // 게시글 수정
   async update(id: number, updatePostDto: UpdatePostDto) {
-    console.log('[UPDATE] 요청 받은 ID:', id);
-    console.log('[UPDATE] 요청 바디:', updatePostDto);
-
     const post = await this.postRepository.findOneBy({ id });
-    console.log('[UPDATE] 찾은 게시물:', post);
 
     if (!post) {
       throw new NotFoundException(`Post with ID ${id} not found`);
     }
 
     Object.assign(post, updatePostDto);
+    return this.postRepository.save(post);
+  }
+
+  async likePost(id: number): Promise<Post> {
+    const post = await this.findOneWithoutIncrement(id);
+    post.likes += 1;
     return this.postRepository.save(post);
   }
 }

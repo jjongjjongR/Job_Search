@@ -1,107 +1,107 @@
-"use client";
+'use client';
 
-import { useEffect, useState } from "react";
-import axios from "axios";
-import { useSession } from "next-auth/react";
-import { useParams, useRouter } from "next/navigation";
+import Link from 'next/link';
+import { useParams, useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
+import { FeatureShell } from '@/components/feature-shell';
+import { apiRequest, ApiError } from '@/lib/api';
+import { getStoredUser, type AuthUser } from '@/lib/auth';
 
-const api = axios.create({
-  baseURL: "http://localhost:3001",
-});
+type PostDetail = {
+  id: number;
+  title: string;
+  content: string;
+  author: string;
+};
 
-export default function EditPost() {
-  const { data: session } = useSession();
+export default function EditPostPage() {
+  const params = useParams<{ id: string }>();
   const router = useRouter();
-  const { id } = useParams();
-  const postId = Number(id);
-
-  const [title, setTitle] = useState("");
-  const [content, setContent] = useState("");
-  const [author, setAuthor] = useState("");
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [post, setPost] = useState<PostDetail | null>(null);
+  const [title, setTitle] = useState('');
+  const [content, setContent] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
+  const postId = Number(params.id);
 
   useEffect(() => {
-    async function fetchPost() {
-      try {
-        const response = await api.get(`/posts/${postId}`);
-        setTitle(response.data.title);
-        setContent(response.data.content);
-        setAuthor(response.data.author);
-      } catch (error) {
-        console.error("게시글을 불러오는 데 실패했습니다.", error);
-        alert("존재하지 않는 게시글입니다.");
-        router.push("/board");
-      }
-    }
+    setUser(getStoredUser());
 
-    if (postId) fetchPost();
+    const loadPost = async () => {
+      try {
+        const data = await apiRequest<PostDetail>(`/posts/${postId}`);
+        setPost(data);
+        setTitle(data.title);
+        setContent(data.content);
+      } catch (error) {
+        setErrorMessage(
+          error instanceof ApiError ? error.message : '게시글을 불러오지 못했습니다.',
+        );
+      }
+    };
+
+    if (!Number.isNaN(postId)) {
+      void loadPost();
+    }
   }, [postId]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    console.log('PATCH 요청 전송:', { postId, title, content });
-  
-    try {
-      await api.put(`/posts/${postId}`, { title, content });
-      router.push(`/board/${postId}`);
-    } catch (error: any) {
-      console.error('게시글 수정 실패', error.response?.data || error);
-      if (error.response?.status === 404) {
-        alert("해당 게시글이 존재하지 않습니다.");
-        router.push("/board");
-      }
-    }
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    await apiRequest(`/posts/${postId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ title, content }),
+    });
+    router.push(`/board/${postId}`);
   };
-  
 
-  if (!session) {
-    return <p>로그인이 필요합니다.</p>;
-  }
-
-  if (session.user?.name !== author) {
-    return <p>작성자만 수정할 수 있습니다.</p>;
-  }
+  const canEdit = !!user && !!post && user.displayName === post.author;
 
   return (
-    <main className="max-w-3xl mx-auto p-6 bg-white shadow-lg rounded-lg">
-      <h1 className="text-2xl font-bold mb-4 text-center">게시글 수정</h1>
-
-      <form onSubmit={handleSubmit}>
-        <div className="mb-4">
-          <label htmlFor="title" className="block text-sm font-medium text-gray-700">
-            제목
-          </label>
-          <input
-            type="text"
-            id="title"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            required
-          />
+    <FeatureShell
+      eyebrow="Board Edit"
+      title="게시글 수정"
+      description="작성자 본인만 수정할 수 있습니다."
+    >
+      {!post && !errorMessage ? <div className="rounded-[28px] bg-white p-8">loading...</div> : null}
+      {errorMessage ? <div className="rounded-[28px] bg-white p-8 text-red-600">{errorMessage}</div> : null}
+      {post && canEdit ? (
+        <form
+          onSubmit={handleSubmit}
+          className="rounded-[28px] bg-white p-8 shadow-[0_18px_50px_rgba(16,36,61,0.07)]"
+        >
+          <div className="space-y-5">
+            <label className="block">
+              <span className="mb-2 block text-sm font-semibold">제목</span>
+              <input
+                value={title}
+                onChange={(event) => setTitle(event.target.value)}
+                className="w-full rounded-2xl border border-[var(--border-soft)] bg-[var(--card-soft)] px-4 py-3"
+              />
+            </label>
+            <label className="block">
+              <span className="mb-2 block text-sm font-semibold">내용</span>
+              <textarea
+                value={content}
+                onChange={(event) => setContent(event.target.value)}
+                className="h-56 w-full rounded-2xl border border-[var(--border-soft)] bg-[var(--card-soft)] px-4 py-3"
+              />
+            </label>
+            <div className="flex justify-end gap-3">
+              <Link className="rounded-full border border-[var(--border-soft)] px-4 py-2 font-semibold" href={`/board/${postId}`}>
+                취소
+              </Link>
+              <button className="rounded-full bg-[var(--accent)] px-4 py-2 font-semibold text-white" type="submit">
+                수정 저장
+              </button>
+            </div>
+          </div>
+        </form>
+      ) : null}
+      {post && !canEdit ? (
+        <div className="rounded-[28px] bg-white p-8">
+          <p className="text-[var(--text-muted)]">작성자만 수정할 수 있습니다.</p>
         </div>
-
-        <div className="mb-4">
-          <label htmlFor="content" className="block text-sm font-medium text-gray-700">
-            내용
-          </label>
-          <textarea
-            id="content"
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            required
-          />
-        </div>
-
-        <div className="flex justify-end">
-          <button
-            type="submit"
-            className="px-4 py-2 bg-blue-500 text-white rounded-lg shadow-md hover:bg-blue-600 transition"
-          >
-            수정
-          </button>
-        </div>
-      </form>
-    </main>
+      ) : null}
+    </FeatureShell>
   );
 }

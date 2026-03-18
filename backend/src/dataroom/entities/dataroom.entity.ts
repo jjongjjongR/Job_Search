@@ -6,6 +6,7 @@ import {
   Column,
   OneToOne,
   JoinColumn,
+  RelationId,
 } from 'typeorm';
 import { FileEntity } from '../../files/entities/file.entity';
 import { IsString, IsNotEmpty } from 'class-validator';
@@ -31,8 +32,11 @@ export class Dataroom {
   uploader: string;
 
   @OneToOne(() => FileEntity, { cascade: true, onDelete: 'CASCADE' })
-  @JoinColumn()
+  @JoinColumn({ name: 'file_id' })
   file: FileEntity;
+
+  @RelationId((dataroom: Dataroom) => dataroom.file)
+  fileId: number;
 
   constructor(partial: Partial<Dataroom>) {
     Object.assign(this, partial);

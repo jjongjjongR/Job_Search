@@ -1,6 +1,6 @@
 // src/post/dto/create-post.dto.ts
 
-import { IsString, IsNotEmpty } from 'class-validator';
+import { IsOptional, IsString, IsNotEmpty } from 'class-validator';
 
 export class CreatePostDto {
   @IsString()
@@ -12,6 +12,6 @@ export class CreatePostDto {
   content: string;
 
   @IsString()
-  @IsNotEmpty()
+  @IsOptional()
   author: string;
 }

@@ -7,25 +7,35 @@ import {
   Delete,
   Body,
   Param,
-  InternalServerErrorException,
+  UseGuards,
 } from '@nestjs/common';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { JwtUser } from '../auth/interfaces/jwt-user.interface';
+import { assertMaster } from '../common/utils/role.util';
 import { DataroomService } from './dataroom.service';
 import { CreateDataroomDto } from './dto/create-dataroom.dto';
 import { Dataroom } from './entities/dataroom.entity';
-import { FilesService } from 'src/files/files.service';
 
+@ApiTags('dataroom')
+@ApiBearerAuth()
+@UseGuards(JwtAuthGuard)
 @Controller('dataroom')
 export class DataroomController {
-  constructor(
-    private readonly dataroomService: DataroomService,
-    private readonly filesService: FilesService,
-  ) {}
+  constructor(private readonly dataroomService: DataroomService) {}
 
   @Post()
   async create(
     @Body() createDataroomDto: CreateDataroomDto,
+    @CurrentUser() currentUser: JwtUser,
   ): Promise<Dataroom> {
-    return this.dataroomService.create(createDataroomDto);
+    assertMaster(currentUser, '자료 업로드');
+
+    return this.dataroomService.create({
+      ...createDataroomDto,
+      uploader: currentUser.displayName,
+    });
   }
 
   @Get()
@@ -40,18 +50,15 @@ export class DataroomController {
   }
 
   @Delete(':id')
-  async remove(@Param('id') id: string): Promise<{ message: string }> {
-    try {
-      const deleted = await this.dataroomService.remove(Number(id));
-      if (!deleted) {
-        return { message: `Dataroom with ID ${id} not found` };
-      }
-      return { message: `Dataroom with ID ${id} deleted successfully` };
-    } catch (error) {
-      console.error('Error deleting dataroom:', error);
-      throw new InternalServerErrorException(
-        '삭제 중 서버 오류가 발생했습니다.',
-      );
+  async remove(
+    @Param('id') id: string,
+    @CurrentUser() currentUser: JwtUser,
+  ): Promise<{ message: string }> {
+    assertMaster(currentUser, '자료 삭제');
+    const deleted = await this.dataroomService.remove(Number(id));
+    if (!deleted) {
+      return { message: `Dataroom with ID ${id} not found` };
     }
+    return { message: `Dataroom with ID ${id} deleted successfully` };
   }
 }

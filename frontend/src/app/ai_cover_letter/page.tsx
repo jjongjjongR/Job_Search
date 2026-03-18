@@ -1,150 +1,70 @@
-// app/ai_cover_letter/page.tsx
+'use client';
 
-"use client";
+import Link from 'next/link';
+import { FeatureShell } from '@/components/feature-shell';
 
-import { useState } from "react";
-import axios from "axios";
-import Link from "next/link";
-import { useSession } from "next-auth/react";
+const envItems = [
+  'LLM_PROVIDER, OPENAI_API_KEY',
+  'STT_PROVIDER, TTS_PROVIDER, VISION_PROVIDER',
+  'REDIS_HOST, REDIS_PORT, REDIS_TTL_SECONDS',
+  'STORAGE_PROVIDER, S3_BUCKET 또는 LOCAL_STORAGE_ROOT',
+  'INTERNAL_API_SHARED_SECRET',
+];
 
 export default function AICoverLetterPage() {
-  const { data: session, status } = useSession();
-  const [input, setInput] = useState("");
-  const [feedback, setFeedback] = useState<null | {
-    summary: string;
-    issues: string[];
-    suggestions: string[];
-    raw?: string;
-  }>(null);
-  const [loading, setLoading] = useState(false);
-
-  const handleSubmit = async () => {
-    setLoading(true);
-    try {
-      const res = await axios.post(
-        `${process.env.NEXT_PUBLIC_API_URL}/feedback/cover-letter`,
-        { content: input }
-      );
-      setFeedback(res.data);
-
-      if (res.data.summary === "AI 응답 파싱 실패") {
-        console.warn("🛠️ AI 원본 응답 (raw):", res.data.raw);
-      }
-    } catch (err) {
-      alert("오류가 발생했습니다.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  if (status === "loading") return null;
-
-  if (!session) {
-    return (
-      <main className="max-w-2xl mx-auto p-8 bg-white rounded-xl shadow-md">
-        <h1 className="text-2xl font-bold mb-4 text-center">
-          <Link href="/api/auth/signin" className="text-blue-600 hover:underline">
-            로그인
-          </Link>
-          이 필요합니다.
-        </h1>
-        <p className="text-center text-gray-600">
-          로그인 후 자기소개서 분석 기능을 사용할 수 있습니다.
-        </p>
-      </main>
-    );
-  }
-
   return (
-     <main className="min-h-screen py-12 px-4">
-      <div className="max-w-3xl mx-auto bg-white rounded-3xl shadow-2xl p-10">
-        <h1 className="text-4xl font-extrabold mb-8 text-center text-gray-900">
-          AI 자기소개서 피드백
-        </h1>
-
-        <textarea
-          className="w-full border border-gray-300 rounded-2xl p-5 h-52 resize-none
-            focus:outline-none focus:ring-4 focus:ring-blue-400 transition-shadow text-gray-800 text-lg"
-          placeholder="자기소개서를 여기에 입력하세요..."
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-        />
-
-        <div className="mt-8 flex justify-center">
-          <button
-            className={`flex items-center justify-center gap-3 bg-blue-700 hover:bg-blue-800
-              text-white font-semibold px-8 py-3 rounded-2xl shadow-lg transition
-              disabled:opacity-50 disabled:cursor-not-allowed`}
-            onClick={handleSubmit}
-            disabled={loading || input.trim() === ""}
-          >
-            {loading ? (
-              <svg
-                className="animate-spin w-6 h-6 text-white"
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
+    <FeatureShell
+      eyebrow="AI Cover Letter"
+      title="자소서 AI 분석 영역은 다음 단계용으로 준비되어 있습니다"
+      description="이번 단계에서는 인증 경계를 먼저 완성했고, AI 서버는 외부 공개 없이 내부 전용으로 붙일 수 있도록 환경변수와 화면 뼈대만 정리했습니다."
+    >
+      <div className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
+        <div className="rounded-[28px] bg-white p-8 shadow-[0_18px_50px_rgba(16,36,61,0.07)]">
+          <h2 className="text-2xl font-bold">예정된 처리 흐름</h2>
+          <div className="mt-5 grid gap-3">
+            {[
+              '프론트엔드는 NestJS 공개 API에만 요청합니다.',
+              'NestJS는 JWT 인증 후 내부 FastAPI로 자소서 분석을 전달합니다.',
+              'FastAPI는 LLM 도구를 사용해 분석 결과를 만들고, 사용자에게는 정리된 결과만 반환합니다.',
+              '중간 추론 데이터는 최소화하고 장기 저장은 피하는 방향을 유지합니다.',
+            ].map((item) => (
+              <div
+                key={item}
+                className="rounded-2xl border border-[var(--border-soft)] bg-[var(--card-soft)] px-4 py-4 text-sm leading-6 text-[var(--text-muted)]"
               >
-                <circle
-                  className="opacity-25"
-                  cx="12"
-                  cy="12"
-                  r="10"
-                  stroke="currentColor"
-                  strokeWidth="4"
-                ></circle>
-                <path
-                  className="opacity-75"
-                  fill="currentColor"
-                  d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
-                ></path>
-              </svg>
-            ) : null}
-            {loading ? "분석 중..." : "AI 피드백 받기"}
-          </button>
+                {item}
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-6 flex flex-wrap gap-3">
+            <Link
+              href="/login"
+              className="rounded-full bg-[var(--accent)] px-4 py-3 font-semibold text-white shadow-[0_12px_28px_rgba(30,111,217,0.28)]"
+            >
+              로그인하러 가기
+            </Link>
+            <Link
+              href="/"
+              className="rounded-full border border-[var(--border-soft)] bg-white px-4 py-3 font-semibold"
+            >
+              홈으로 이동
+            </Link>
+          </div>
         </div>
 
-        {feedback && (
-          <div className="mt-12 space-y-8">
-            <section className="bg-blue-50 rounded-xl p-6 shadow-inner border border-blue-200">
-              <h2 className="text-2xl font-semibold mb-3 text-blue-700 border-b border-blue-300 pb-2">
-                1. 총평
-              </h2>
-              <p className="text-gray-900 text-lg">{feedback.summary}</p>
-            </section>
-
-            <section className="bg-red-50 rounded-xl p-6 shadow-inner border border-red-200">
-              <h2 className="text-2xl font-semibold mb-3 text-red-700 border-b border-red-300 pb-2">
-                2. 문제점
-              </h2>
-              {feedback.issues.length > 0 ? (
-                <ul className="list-disc list-inside text-red-800 space-y-1 text-lg">
-                  {feedback.issues.map((issue, idx) => (
-                    <li key={idx}>{issue}</li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="text-gray-500 text-lg italic">없음</p>
-              )}
-            </section>
-
-            <section className="bg-green-50 rounded-xl p-6 shadow-inner border border-green-200">
-              <h2 className="text-2xl font-semibold mb-3 text-green-700 border-b border-green-300 pb-2">
-                3. 개선된 예시문장
-              </h2>
-              {feedback.suggestions.length > 0 ? (
-                <ul className="list-disc list-inside text-green-800 space-y-1 text-lg">
-                  {feedback.suggestions.map((s, idx) => (
-                    <li key={idx}>{s}</li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="text-gray-500 text-lg italic">없음</p>
-              )}
-            </section>
-          </div>
-        )}
+        <div className="rounded-[28px] bg-[var(--card-strong)] p-7 text-white">
+          <h2 className="text-xl font-bold">AI 서버 준비 상태</h2>
+          <p className="mt-3 text-sm leading-6 text-white/78">
+            아래 값들은 [ai/.env.example](/Users/jjongm3pro/Desktop/project/World_Job_Search/ai/.env.example)에 미리 정리해 두었습니다.
+          </p>
+          <ul className="mt-4 space-y-3 text-sm leading-6 text-white/78">
+            {envItems.map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ul>
+        </div>
       </div>
-    </main>
+    </FeatureShell>
   );
 }
