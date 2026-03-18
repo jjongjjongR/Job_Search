@@ -1,11 +1,15 @@
 // src/post/post.service.ts
 
-import { Injectable, NotFoundException } from '@nestjs/common'; // NotFoundException 추가
+import {
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common'; // NotFoundException 추가
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { Post } from './entities/post.entity';
 import { CreatePostDto } from './dto/create-post.dto';
 import { UpdatePostDto } from './dto/update-post.dto';
+import { PostLike } from './entities/post-like.entity';
 
 export type PostSortBy = 'latest' | 'likes' | 'views';
 
@@ -14,6 +18,8 @@ export class PostService {
   constructor(
     @InjectRepository(Post)
     private readonly postRepository: Repository<Post>,
+    @InjectRepository(PostLike)
+    private readonly postLikeRepository: Repository<PostLike>,
   ) {}
 
   // 게시글 생성
@@ -55,6 +61,48 @@ export class PostService {
     return post;
   }
 
+  // 2026-03-18 신규: 현재 사용자 기준 좋아요 여부까지 포함한 게시글 상세 응답 생성
+  async findOneWithLikeStatus(id: number, userId: string) {
+    const post = await this.findOne(id);
+    const existingLike = await this.postLikeRepository.findOne({
+      where: { postId: id, userId },
+    });
+
+    return {
+      ...post,
+      likedByCurrentUser: !!existingLike,
+    };
+  }
+
+  // 2026-03-18 신규: 마이페이지에서 현재 사용자가 작성한 게시글 목록 조회
+  async findAuthoredPostsByUser(displayName: string): Promise<Post[]> {
+    return this.postRepository.find({
+      where: { author: displayName },
+      order: { createdAt: 'DESC' },
+    });
+  }
+
+  // 2026-03-18 신규: 마이페이지에서 현재 사용자가 좋아요한 게시글 목록 조회
+  async findLikedPostsByUser(userId: string): Promise<Post[]> {
+    const likes = await this.postLikeRepository.find({
+      where: { userId },
+      order: { createdAt: 'DESC' },
+    });
+
+    if (likes.length === 0) {
+      return [];
+    }
+
+    const posts = await this.postRepository.find({
+      where: { id: In(likes.map((like) => like.postId)) },
+      order: { createdAt: 'DESC' },
+    });
+
+    return likes
+      .map((like) => posts.find((post) => post.id === like.postId))
+      .filter((post): post is Post => !!post);
+  }
+
   // 게시글 삭제
   async remove(id: number): Promise<void> {
     const result = await this.postRepository.delete(id);
@@ -75,9 +123,43 @@ export class PostService {
     return this.postRepository.save(post);
   }
 
-  async likePost(id: number): Promise<Post> {
+  async likePost(
+    id: number,
+    userId: string,
+  ): Promise<Post & { likedByCurrentUser: boolean }> {
     const post = await this.findOneWithoutIncrement(id);
+
+    const existingLike = await this.postLikeRepository.findOne({
+      where: { postId: id, userId },
+    });
+
+    if (existingLike) {
+      // 2026-03-18 수정: 이미 누른 좋아요는 취소되도록 기존 기록을 삭제
+      await this.postLikeRepository.remove(existingLike);
+      // 2026-03-18 수정: 좋아요 취소 시 게시글 좋아요 수를 1 감소시키되 0 아래로는 내려가지 않게 보정
+      post.likes = Math.max(0, post.likes - 1);
+      // 2026-03-18 수정: 취소 직후 프론트가 바로 회색/핑크 UI를 바꿀 수 있게 현재 상태를 함께 반환
+      const savedPost = await this.postRepository.save(post);
+
+      return {
+        ...savedPost,
+        likedByCurrentUser: false,
+      };
+    }
+
+    // 2026-03-18 신규: 같은 사용자가 같은 게시글에 다시 좋아요를 못 누르게 기록 저장
+    const postLike = this.postLikeRepository.create({
+      postId: id,
+      userId,
+    });
+    await this.postLikeRepository.save(postLike);
+
     post.likes += 1;
-    return this.postRepository.save(post);
+    const savedPost = await this.postRepository.save(post);
+
+    return {
+      ...savedPost,
+      likedByCurrentUser: true,
+    };
   }
 }

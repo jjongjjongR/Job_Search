@@ -17,6 +17,7 @@ type PostDetail = {
   likes: number;
   views: number;
   createdAt: string;
+  likedByCurrentUser: boolean;
 };
 
 type CommentItem = {
@@ -35,6 +36,7 @@ export default function PostDetailPage() {
   const [commentContent, setCommentContent] = useState('');
   const [editingCommentId, setEditingCommentId] = useState<number | null>(null);
   const [editContent, setEditContent] = useState('');
+  const [likeErrorMessage, setLikeErrorMessage] = useState('');
   const postId = Number(params.id);
 
   const loadPost = useCallback(async () => {
@@ -114,10 +116,17 @@ export default function PostDetailPage() {
   };
 
   const handleLikePost = async () => {
-    const updatedPost = await apiRequest<PostDetail>(`/posts/${postId}/like`, {
-      method: 'POST',
-    });
-    setPost(updatedPost);
+    setLikeErrorMessage('');
+
+    try {
+      const updatedPost = await apiRequest<PostDetail>(`/posts/${postId}/like`, {
+        method: 'POST',
+      });
+      // 2026-03-18 수정: 좋아요 성공 후 서버가 내려준 현재 사용자 좋아요 상태를 그대로 반영
+      setPost(updatedPost);
+    } catch {
+      setLikeErrorMessage('좋아요 처리 중 문제가 발생했습니다.');
+    }
   };
 
   if (!post) {
@@ -161,11 +170,20 @@ export default function PostDetailPage() {
             </div>
             <button
               onClick={() => void handleLikePost()}
-              className="rounded-full bg-[var(--card-soft)] px-4 py-2 font-semibold text-[var(--accent)]"
+              // 2026-03-18 수정: 좋아요를 다시 눌러 취소할 수 있도록 버튼 비활성화를 제거
+              // 2026-03-18 수정: 좋아요 여부에 따라 핑크/회색 UI가 바로 바뀌도록 스타일 분기
+              className={`rounded-full px-4 py-2 font-semibold ${
+                post.likedByCurrentUser
+                  ? 'bg-[#e5e7eb] text-[#6b7280]'
+                  : 'bg-[#f472b6] text-white'
+              }`}
             >
               좋아요
             </button>
           </div>
+          {likeErrorMessage ? (
+            <p className="mt-3 text-sm text-[var(--text-muted)]">{likeErrorMessage}</p>
+          ) : null}
 
           <p className="mt-6 whitespace-pre-wrap leading-8">{post.content}</p>
 

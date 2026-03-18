@@ -3,13 +3,42 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { FeatureShell } from '@/components/feature-shell';
+import { apiRequest } from '@/lib/api';
 import { getStoredUser, type AuthUser } from '@/lib/auth';
+
+type PostSummary = {
+  id: number;
+  title: string;
+  author: string;
+  likes: number;
+  views: number;
+  createdAt: string;
+};
 
 export default function MyPage() {
   const [user, setUser] = useState<AuthUser | null>(null);
+  const [myPosts, setMyPosts] = useState<PostSummary[]>([]);
+  const [likedPosts, setLikedPosts] = useState<PostSummary[]>([]);
 
   useEffect(() => {
-    setUser(getStoredUser());
+    const currentUser = getStoredUser();
+    setUser(currentUser);
+
+    if (!currentUser) {
+      return;
+    }
+
+    const loadMyPageData = async () => {
+      const [authored, liked] = await Promise.all([
+        apiRequest<PostSummary[]>('/posts/me/authored'),
+        apiRequest<PostSummary[]>('/posts/me/liked'),
+      ]);
+
+      setMyPosts(authored);
+      setLikedPosts(liked);
+    };
+
+    void loadMyPageData();
   }, []);
 
   return (
@@ -26,6 +55,19 @@ export default function MyPage() {
               <InfoRow label="이메일" value={user.email} />
               <InfoRow label="username" value={user.username} />
               <InfoRow label="권한" value={user.role} />
+            </div>
+
+            <div className="mt-6 grid gap-6 lg:grid-cols-2">
+              <PostListCard
+                title="내가 쓴 글"
+                emptyMessage="작성한 게시글이 없습니다."
+                posts={myPosts}
+              />
+              <PostListCard
+                title="내가 좋아요한 글"
+                emptyMessage="좋아요한 게시글이 없습니다."
+                posts={likedPosts}
+              />
             </div>
           </div>
 
@@ -61,6 +103,39 @@ function InfoRow({ label, value }: { label: string; value: string }) {
     <div className="grid gap-1 rounded-2xl bg-white px-4 py-3 sm:grid-cols-[120px_1fr]">
       <span className="text-sm font-semibold text-[var(--text-muted)]">{label}</span>
       <span className="break-all">{value}</span>
+    </div>
+  );
+}
+
+function PostListCard({
+  title,
+  emptyMessage,
+  posts,
+}: {
+  title: string;
+  emptyMessage: string;
+  posts: PostSummary[];
+}) {
+  return (
+    <div className="rounded-[28px] border border-[var(--border-soft)] bg-white p-5">
+      <h3 className="text-lg font-bold">{title}</h3>
+      <div className="mt-4 space-y-3">
+        {posts.length === 0 ? (
+          <p className="text-sm text-[var(--text-muted)]">{emptyMessage}</p>
+        ) : null}
+        {posts.map((post) => (
+          <Link
+            key={post.id}
+            href={`/board/${post.id}`}
+            className="block rounded-2xl bg-[var(--card-soft)] px-4 py-3"
+          >
+            <p className="font-semibold">{post.title}</p>
+            <p className="mt-2 text-xs text-[var(--text-muted)]">
+              좋아요 {post.likes} · 조회수 {post.views}
+            </p>
+          </Link>
+        ))}
+      </div>
     </div>
   );
 }

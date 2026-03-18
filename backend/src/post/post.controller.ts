@@ -47,9 +47,29 @@ export class PostController {
     return this.postService.findAll(sortBy);
   }
 
+  @Get('me/authored')
+  async findMyPosts(
+    @CurrentUser() currentUser: JwtUser,
+  ): Promise<PostEntity[]> {
+    return this.postService.findAuthoredPostsByUser(currentUser.displayName);
+  }
+
+  @Get('me/liked')
+  async findMyLikedPosts(
+    @CurrentUser() currentUser: JwtUser,
+  ): Promise<PostEntity[]> {
+    return this.postService.findLikedPostsByUser(currentUser.userId);
+  }
+
   @Get(':id')
-  async findOne(@Param('id') id: string): Promise<PostEntity> {
-    return await this.postService.findOne(Number(id));
+  async findOne(
+    @Param('id') id: string,
+    @CurrentUser() currentUser: JwtUser,
+  ): Promise<PostEntity & { likedByCurrentUser: boolean }> {
+    return await this.postService.findOneWithLikeStatus(
+      Number(id),
+      currentUser.userId,
+    );
   }
 
   @Delete(':id')
@@ -75,7 +95,10 @@ export class PostController {
   }
 
   @Post(':id/like')
-  async likePost(@Param('id') id: string): Promise<PostEntity> {
-    return this.postService.likePost(Number(id));
+  async likePost(
+    @Param('id') id: string,
+    @CurrentUser() currentUser: JwtUser,
+  ): Promise<PostEntity & { likedByCurrentUser: boolean }> {
+    return this.postService.likePost(Number(id), currentUser.userId);
   }
 }
