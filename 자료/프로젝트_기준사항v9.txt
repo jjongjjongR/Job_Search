@@ -1,0 +1,460 @@
+[프로젝트 기준 사항.txt]
+
+프로젝트명
+- 온 세상이 취업
+- World_JobSearch
+
+문서 목적
+- 본 문서는 면접 AI 운영 규칙과 서비스 기준 사항을 고정하기 위한 기준 문서이다.
+- 구현 전후에 정책이 흔들리지 않도록, 문서 충분도, 평가 기준, 저장 정책, 예외 처리, 결과 노출 방식을 명확히 정리한다.
+
+1. 문서 충분도
+- 충분: JD 포함 + 사용자 문서 1개 이상
+- 보통: JD만 있음 -> 면접은 JD와 공통 질문으로 진행, 자소서는 비활성화
+- 부족: JD도 없고 사용자 문서도 빈약 -> AI 기능 비활성화
+
+2. 답변 충분성
+
+2-1. 평가 기준
+- 질문 적합성: 20
+- 구체성: 20
+- 근거/성과: 15
+- 직무 적합성: 15
+- 논리성/구조: 10
+- 진정성/태도: 5
+- 비언어:
+  - 얼굴 잘 보이는가: 5
+  - 정면 응시 프록시가 괜찮은가: 5
+  - 움직임/가림/저조도 등 장해 요소가 심하지 않은가: 5
+
+2-2. 충분성 기준
+답변 충분으로 판단하는 기준
+- 기본 충분성 기준은 공통으로 적용하되, 질문 유형에 따라 세부 판단 가중치는 다르게 반영할 수 있다.
+- 질문 적합성 20점 중 15점 이상
+- 구체성 20점 중 15점 이상
+- 직무 적합성 15점 중 12점 이상
+- 전체 내용 점수 85점 중 70점 이상
+
+그리고 아래 중 3개 이상 만족
+- 질문 의도에 직접 답함
+- 본인 역할이 드러남
+- 근거나 결과가 있음
+- 직무와 연결됨
+
+2-3. 답변 불충분 기준
+아래 중 하나라도 강하게 걸리면 꼬리질문
+- 질문 의도에 직접 답하지 않음
+- 본인 역할이 모호함
+- 결과/근거가 없음
+- 직무 연결이 약함
+- 너무 추상적임
+
+2-4. 꼬리질문 우선순위
+1. 본인 역할/기여도
+2. 성과/근거
+3. 직무 연결
+4. 전문성 디테일
+5. 협업/태도 보완
+
+3. 질문 타입별 비율
+- 기본 기준: 총 10문항
+- 각 질문당 꼬리질문은 최대 2개까지 가능
+
+구성
+- 1분 자기소개: 1
+- 우리 회사 지원동기: 1
+- 우리 JD 적합성: 2
+- 프로젝트 심층: 2
+- 다른 프로젝트: 2
+- 협업/문제해결: 1
+- 마무리: 1
+
+4. STT 실패 기준
+- 재업로드는 같은 턴 최대 2회
+- 2회 실패 시 텍스트 답변 유도
+
+재업로드 조건
+- 전사 결과가 1문장 이하 + 핵심 명사 부족
+- 너무 짧은 영상(예: 3초 이하)
+- 음성 없음 또는 심한 잡음
+
+5. Vision 무효 처리 기준
+- 얼굴 유지율 너무 낮음 -> 해당 세션 비언어 점수 0점
+- 다중 얼굴 검출 -> 해당 턴 Vision 무효
+- 저조도/가림 심함 -> Vision 결과 참고만 하고 점수 반영 약화
+
+6. 저장 기간 정책
+
+6-1. 임시 데이터 삭제 정책
+아래 데이터는 세션 종료 후 10분 내 삭제한다.
+- raw transcript
+- raw vision metrics
+- hidden score
+- 세션 중간 상태
+- 실패 세션의 임시 분석 데이터
+
+실패 세션도 10분 후 함께 정리한다.
+
+6-2. 영구 저장 데이터
+- interview_sessions
+- interview_turns
+- question_text
+- answer_video_title
+- answer_full_text
+  - 사용자에게 다시 보여줄 답변 텍스트
+- feedback_text
+- nonverbal_summary_text
+- 최종 리포트
+
+7. 최종 결과 점수 계산 방식
+- 내용 평가: 85
+- 비언어 보조 평가: 15
+
+세부 내용 평가는 아래 항목을 사용한다.
+- 질문 적합성
+- 구체성
+- 근거/성과
+- 직무 적합성
+- 논리성/구조
+- 진정성/태도
+
+세부 비언어 평가는 아래 항목을 사용한다.
+- 얼굴 유지 안정성
+- 정면 응시 프록시
+- 움직임/가림/저조도 등 장해 요소
+
+8. 리포트 구성
+- 총점
+- 전체 평가 요약
+- 강점 3개
+- 보완점 3개
+- 연습 방향 3개
+- 질문 목록 - 답변
+- 턴별 피드백
+
+9. 질문 길이 제한
+- 질문 문장 1~2문장
+- 120자 이내 권장
+
+10. 답변 시간 권장 범위
+- 최소 10초 이상 권장
+- 3초 이하 무효
+- 2분 이상이면 경고 또는 요약 유도
+- 30초 미만이면 “답변이 짧을 수 있습니다” 정도의 약한 경고
+
+11. 최종 결과 노출 방식
+- 점수와 그에 맞는 이모지(등급)를 보여주고 내용 설명
+- 100점 만점 고정
+- 정수로 표시
+- 내부 계산 또한 정수
+
+등급 기준
+- 90~100: 매우 우수 🌟
+- 80~89: 우수 ✅
+- 70~79: 보통 🙂
+- 60~69: 보완 필요 ⚠️
+- 0~59: 집중 보완 필요 🔧
+
+12. 저장 / 저장 안 함
+
+12-1. 턴별 영구 저장
+- question_text
+- answer_video_title
+- answer_full_text
+  - 사용자에게 다시 보여줄 답변 텍스트
+  - raw transcript 원본이 아니다.
+- feedback_text
+- nonverbal_summary_text
+
+12-2. 임시 저장 후 세션 종료 10분 내 삭제
+- raw transcript
+- raw vision metrics
+- hidden score
+- 세션 중간 상태
+- 실패 세션의 임시 분석 데이터
+
+12-3. 저장 안 함
+- raw video
+- raw frame image
+
+13. 질문 타입별 충분성 기준 차이
+- 룰은 서브이고, 최종 판단은 LLM이 수행한다.
+
+질문 유형별 중점
+- 지원동기: 직무 적합성, 진정성 비중 높음
+- 프로젝트 심층: 구체성, 근거/성과, 역할 비중 높음
+- 협업/문제해결: 논리성, 태도 비중 높음
+
+14. 턴별 저장 길이 제한
+- 너무 길면(영상 길이 초과 -> 업로드 안 됨)
+- 재제출 요청
+
+15. 텍스트 답변 유도 시 처리 규칙
+- 텍스트 답변 유도 시 비언어 평가는 0점 처리
+- 일반 평가는 내용 평가 기준으로만 재산정
+- 텍스트 답변도 answer_full_text로 저장한다.
+- answer_full_text는 raw transcript 원본이 아니다.
+- answer_full_text는 사용자에게 다시 보여줄 답변 텍스트다.
+- answer_full_text는 STT 결과를 바탕으로 만들되, 사용자가 실제 말한 흐름을 최대한 보존한다.
+- answer_full_text는 말버릇, 반복어, 장황함을 제거하지 않는다.
+- answer_full_text의 허용 보정은 띄어쓰기, 문장부호, 명백한 STT 깨짐 수정 정도로 제한한다.
+- raw transcript 원본은 별도 비영구 저장 대상이며 세션 종료 후 10분 내 삭제한다.
+
+16. 세션 중간 종료 시 결과 처리
+- 5문항 이상 시 리포트 생성
+- 5문항 미만은 평가하지 않고 모두 삭제
+- 여기서 5문항 기준은 모든 질문을 포함한 실제 진행 문항 수 기준이다.
+
+17. 질문 중복 방지 규칙
+- 같은 세션에서 동일 의미 질문 반복 금지
+- 같은 토픽이더라도 표현만 바꾼 질문 남발 금지
+- follow-up은 반드시 직전 답변의 부족점과 연결
+
+18. 실패 상태 정의
+- 첫 질문 생성 실패
+- 답변 업로드 실패
+- STT 2회 실패 후 텍스트도 미입력
+- 시스템 오류로 다음 질문 생성 불가
+
+19. 최종 메모
+- 본 문서는 면접 AI의 운영 기준을 고정하기 위한 문서이다.
+- 실제 구현 시에는 본 기준을 우선 적용하고, 추가 예외 상황이 발견되면 별도 버전 관리 하에 보완한다.
+
+20. 구현 고정값
+
+20-1. 문서 충분도 상태값
+- SUFFICIENT
+  - JD 포함 + 사용자 문서 1개 이상
+- JD_ONLY
+  - JD만 있음
+- INSUFFICIENT
+  - JD도 없고 사용자 문서도 빈약함
+
+20-2. 면접 세션 상태값
+- IN_PROGRESS
+  - 세션 진행 중
+- FINISHED
+  - 정상 종료 및 리포트 생성 완료
+- FAILED
+  - 시스템 오류 등으로 정상 진행 불가
+- CANCELLED
+  - 사용자가 중간 종료했거나, 5문항 미만으로 종료되어 리포트 없이 종료 처리
+
+20-3. 질문 타입 상태값
+- SELF_INTRO
+  - 1분 자기소개
+- MOTIVATION
+  - 지원동기
+- JD_FIT
+  - JD 적합성 질문
+- PROJECT_DEEP_DIVE
+  - 프로젝트 심층 질문
+- OTHER_PROJECT
+  - 다른 프로젝트 질문
+- COLLAB_PROBLEM_SOLVING
+  - 협업/문제해결 질문
+- CLOSING
+  - 마무리 질문
+- FOLLOW_UP
+  - 꼬리질문
+
+20-4. 답변 타입 상태값
+- VIDEO
+  - 영상 답변
+- TEXT
+  - 텍스트 답변
+
+20-5. 다음 진행 결정값
+- RETRY_UPLOAD
+  - STT 실패로 같은 턴에서 영상 재업로드 요청
+- REQUEST_TEXT
+  - STT 2회 실패 후 텍스트 답변 전환 요청
+- FOLLOW_UP
+  - 현재 질문의 부족점을 보완하기 위한 꼬리질문 진행
+- NEXT_QUESTION
+  - 다음 기본 질문으로 이동
+- FINISH_SESSION
+  - 세션 종료 단계로 이동
+
+20-6. Vision 결과 상태값
+- VALID
+  - 정상 반영
+- WEAKENED
+  - 저조도/가림 등으로 점수 반영 약화
+- INVALID
+  - 다중 얼굴 등으로 해당 턴 Vision 무효
+- SKIPPED
+  - 텍스트 답변 전환 등으로 Vision 자체를 사용하지 않음
+
+21. 저장소 역할 구분
+
+21-1. private durable storage
+- 오래 보관해도 되는 파일 저장소
+- 저장 대상:
+  - 사용자 업로드 문서
+  - 자료실 파일
+  - 자소서/면접 결과 파일이 필요할 경우 그 산출물 파일
+
+21-2. private temp storage
+- 짧게만 보관하는 임시 파일 저장소
+- 저장 대상:
+  - 임시 업로드 답변 영상
+  - raw transcript json
+  - raw vision metrics json
+- 세션 종료 후 10분 내 삭제 대상이다.
+
+21-3. Redis temp state
+- 파일이 아니라 임시 상태값 저장소
+- 저장 대상:
+  - 현재 질문 번호
+  - 현재 질문 타입
+  - follow-up count
+  - stt retry count
+  - hidden score
+  - cleanup deadline
+  - 텍스트 답변 전환 여부
+
+21-4. 저장 안 함
+- raw video 장기 저장 안 함
+- raw frame image 장기 저장 안 함
+- 세션 중간 내부 계산 원본 장기 저장 안 함
+
+22. decision 응답 구조 기준
+
+- 면접 답변 처리 응답의 decision 객체는 아래 구조를 기본으로 사용한다.
+  - type
+  - message
+  - retryCount (필요한 경우만)
+  - followUpCountForCurrentQuestion (필요한 경우만)
+  - nextQuestion (필요한 경우만)
+    - questionType
+    - questionText
+
+22-1. RETRY_UPLOAD
+- 의미:
+  - 음성 인식 실패 등으로 같은 턴에서 다시 업로드 요청
+- 사용 필드:
+  - type
+  - message
+  - retryCount
+
+22-2. REQUEST_TEXT
+- 의미:
+  - STT 2회 실패로 텍스트 답변 전환 요청
+- 사용 필드:
+  - type
+  - message
+
+22-3. FOLLOW_UP
+- 의미:
+  - 현재 질문의 부족점을 보완하는 꼬리질문 진행
+- 사용 필드:
+  - type
+  - message
+  - followUpCountForCurrentQuestion
+  - nextQuestion
+
+22-4. NEXT_QUESTION
+- 의미:
+  - 다음 기본 질문으로 이동
+- 사용 필드:
+  - type
+  - message
+  - followUpCountForCurrentQuestion
+  - nextQuestion
+
+22-5. FINISH_SESSION
+- 의미:
+  - 세션 종료 단계로 이동
+- 사용 필드:
+  - type
+  - message
+
+23. 공통 에러 응답 형식
+
+- 공개 API와 내부 API는 아래 형식을 공통 에러 응답 기본 형식으로 사용한다.
+- 필드:
+  - errorCode
+  - message
+  - retryable
+  - details
+
+예시:
+{
+  "errorCode": "STT_FAILED",
+  "message": "음성 인식에 실패했습니다.",
+  "retryable": true,
+  "details": {
+    "retryCount": 1
+  }
+}
+
+24. 에러 코드 의미
+
+- DOCUMENT_INSUFFICIENT
+  - JD와 문서가 부족하여 세션 시작 불가
+- FIRST_QUESTION_GENERATION_FAILED
+  - 첫 질문 생성 실패
+- SESSION_NOT_FOUND
+  - 면접 세션을 찾을 수 없음
+- TURN_NUMBER_MISMATCH
+  - 현재 턴 번호와 요청 턴 번호가 맞지 않음
+- ANSWER_UPLOAD_FAILED
+  - 영상 업로드 실패
+- STT_FAILED
+  - 음성 인식 실패
+- TEXT_ANSWER_REQUIRED
+  - STT 2회 실패 후 텍스트 답변 필요
+- VISION_INVALID
+  - Vision 결과 무효 처리
+- NEXT_QUESTION_GENERATION_FAILED
+  - 다음 질문 생성 실패
+- SESSION_TOO_SHORT_TO_REPORT
+  - 5문항 미만 종료로 리포트 생성 안 함
+- TEMP_CLEANUP_PENDING
+  - 종료 후 임시 데이터 삭제 대기 중
+- INTERNAL_AI_UNAVAILABLE
+  - 내부 AI 서버 사용 불가
+- INTERNAL_AUTH_INVALID
+  - 내부 API 인증 실패
+- INVALID_REQUEST
+  - 잘못된 요청 형식
+
+25. Redis key 규칙
+
+25-1. 세션 전체 상태
+- interview:session:{sessionId}:state
+
+저장 예시:
+- status
+- documentSufficiency
+- currentQuestionNumber
+- currentQuestionType
+- followUpCountForCurrentQuestion
+- sttRetryCountForCurrentTurn
+- textAnswerRequired
+
+25-2. hidden score
+- interview:session:{sessionId}:hidden-score:{turnNumber}
+
+25-3. raw transcript
+- interview:session:{sessionId}:raw-transcript:{turnNumber}
+
+25-4. raw vision
+- interview:session:{sessionId}:raw-vision:{turnNumber}
+
+25-5. stt retry count
+- interview:session:{sessionId}:stt-retry:{turnNumber}
+
+25-6. cleanup deadline
+- interview:session:{sessionId}:cleanup
+
+저장 예시:
+- deleteAfterSeconds
+- deleteAt
+
+25-7. Redis key 설계 원칙
+- 세션 전체 흐름은 state key 하나를 중심으로 관리한다.
+- 턴별 임시값은 turnNumber를 붙여서 관리한다.
+- transcript와 vision 원본은 필요 시 storage key를 저장하고, Redis에는 참조값만 저장할 수 있다.
+- 세션 종료 후 cleanup key를 기준으로 10분 내 삭제를 수행한다.
