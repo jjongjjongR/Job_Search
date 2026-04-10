@@ -1,6 +1,9 @@
 # ai/app/services/interview/finish_service.py
 # 면접 세션 종료 더미 응답을 반환하는 서비스 파일
 
+from datetime import datetime, timezone
+
+from app.adapters.redis_state_store import redis_interview_state_store
 from app.schemas.common import InterviewSessionStatus
 from app.schemas.interview import (
     FinalReport,
@@ -9,12 +12,13 @@ from app.schemas.interview import (
 )
 
 # 2026.04.01 이종헌 신규
-def interview_finish_service(
+async def interview_finish_service(
     payload: InterviewFinishRequest,
 ) -> InterviewFinishResponse:
-    return InterviewFinishResponse(
+    finished_at = datetime.now(timezone.utc).isoformat()
+    response = InterviewFinishResponse(
         status=InterviewSessionStatus.FINISHED,
-        finishedAt="2026-04-01T14:00:00Z",
+        finishedAt=finished_at,
         finalReport=FinalReport(
             totalScore=81,
             grade="우수",
@@ -36,3 +40,19 @@ def interview_finish_service(
             ],
         ),
     )
+
+    # 2026.04.10 신규: 세션 종료 시 cleanup deadline key를 기록
+    await redis_interview_state_store.schedule_cleanup(
+        session_id=payload.sessionId,
+        ttl_seconds=600,
+    )
+    await redis_interview_state_store.save_session_state(
+        session_id=payload.sessionId,
+        payload={
+            "status": response.status,
+            "finishedAt": response.finishedAt,
+            "cleanupScheduled": True,
+        },
+    )
+
+    return response

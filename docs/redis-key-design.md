@@ -8,8 +8,8 @@
 
 - `interview:session:{sessionId}:state`
 - `interview:session:{sessionId}:hidden-score:{turnNumber}`
-- `interview:session:{sessionId}:raw-transcript:{turnNumber}`
-- `interview:session:{sessionId}:raw-vision:{turnNumber}`
+- `interview:session:{sessionId}:transcript:{turnNumber}`
+- `interview:session:{sessionId}:vision:{turnNumber}`
 - `interview:session:{sessionId}:stt-retry:{turnNumber}`
 - `interview:session:{sessionId}:cleanup`
 
@@ -53,7 +53,7 @@
 ### 3-3. raw transcript
 
 - Key:
-  - `interview:session:{sessionId}:raw-transcript:{turnNumber}`
+  - `interview:session:{sessionId}:transcript:{turnNumber}`
 - 용도:
   - STT 원문 저장
 - 예시 값:
@@ -69,7 +69,7 @@
 ### 3-4. raw vision
 
 - Key:
-  - `interview:session:{sessionId}:raw-vision:{turnNumber}`
+  - `interview:session:{sessionId}:vision:{turnNumber}`
 - 용도:
   - Vision 원시 지표 저장
 - 예시 값:
@@ -118,3 +118,35 @@
 - 모든 key는 세션 종료 후 10분 내 삭제 대상이다.
 - `cleanup` key는 삭제 작업 기준 시각을 담는다.
 - 세션 실패 시에도 같은 규칙을 적용한다.
+- 세션 진행 중에는 state/raw 계열 key의 TTL을 동일하게 연장할 수 있다.
+
+## 5. 현재 구현 기준
+
+- FastAPI helper 위치:
+  - `ai/app/adapters/redis_state_store.py`
+- 제공 메서드:
+  - `save_session_state`
+  - `delete_session_state`
+  - `get_session_state`
+  - `save_raw_transcript`
+  - `save_raw_vision_metrics`
+  - `save_hidden_score`
+  - `save_stt_retry_count`
+  - `get_stt_retry_count`
+  - `refresh_session_ttl`
+  - `schedule_cleanup`
+  - `delete_session_artifacts`
+- 기본 TTL:
+  - `REDIS_DEFAULT_TTL_SECONDS`
+  - 기본값 `600`
+
+## 6. 서비스 연결 기준
+
+- `POST /internal/interview/start`
+  - Redis state 초기화
+- `POST /internal/interview/answer`
+  - transcript / vision / hidden-score / stt-retry 저장
+  - 세션 key TTL 연장
+- `POST /internal/interview/finish`
+  - cleanup key 저장
+  - 10분 삭제 기준 시각 기록

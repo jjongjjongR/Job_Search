@@ -39,6 +39,7 @@ class InterviewStartRequest(BaseModel):
     면접 세션 시작 요청 모델.
     """
 
+    sessionId: str = Field(description="NestJS가 생성한 면접 세션 ID")
     userId: str = Field(description="요청 사용자 ID")
     companyName: str = Field(description="회사명")
     positionName: str = Field(description="직무명")

@@ -1,0 +1,29 @@
+export enum JobAnalysisRequestStatus {
+  PENDING = 'PENDING',
+  COMPLETED = 'COMPLETED',
+  FAILED = 'FAILED',
+}
+
+export enum DocumentSufficiencyStatus {
+  SUFFICIENT = 'SUFFICIENT',
+  JD_ONLY = 'JD_ONLY',
+  INSUFFICIENT = 'INSUFFICIENT',
+}
+
+export enum InterviewSessionStatus {
+  IN_PROGRESS = 'IN_PROGRESS',
+  FINISHED = 'FINISHED',
+  FAILED = 'FAILED',
+  CANCELLED = 'CANCELLED',
+}
+
+export enum InterviewQuestionType {
+  SELF_INTRO = 'SELF_INTRO',
+  MOTIVATION = 'MOTIVATION',
+  JD_FIT = 'JD_FIT',
+  PROJECT_DEEP_DIVE = 'PROJECT_DEEP_DIVE',
+  OTHER_PROJECT = 'OTHER_PROJECT',
+  COLLAB_PROBLEM_SOLVING = 'COLLAB_PROBLEM_SOLVING',
+  CLOSING = 'CLOSING',
+  FOLLOW_UP = 'FOLLOW_UP',
+}

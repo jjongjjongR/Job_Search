@@ -16,7 +16,7 @@ import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { FilesService } from './files.service';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { diskStorage } from 'multer';
+import { memoryStorage } from 'multer';
 import { CreateFileDto } from './dto/create-file.dto';
 import { Response } from 'express';
 import * as path from 'path';
@@ -28,7 +28,6 @@ import { assertMaster } from '../common/utils/role.util';
 import {
   createDownloadDisposition,
   normalizeOriginalName,
-  sanitizeStoredFilename,
 } from './utils/file-name.util';
 
 const ALLOWED_EXTENSIONS = [
@@ -69,16 +68,11 @@ export default class FilesController {
 
         callback(null, true);
       },
-      storage: diskStorage({
-        destination: './uploads',
-        filename: (req, file, cb) => {
-          const filename = `${Date.now()}-${sanitizeStoredFilename(file.originalname)}`;
-          cb(null, filename);
-        },
-      }),
+      // 2026-04-10 수정: 로컬 저장 구현을 controller 밖 storage adapter로 이동
+      storage: memoryStorage(),
     }),
   )
-  uploadFile(
+  async uploadFile(
     @UploadedFile() file: Express.Multer.File,
     @Body() createFileDto: CreateFileDto,
     @CurrentUser() currentUser: JwtUser,
@@ -89,10 +83,12 @@ export default class FilesController {
       throw new BadRequestException('업로드할 파일이 필요합니다.');
     }
 
+    const storedFile = await this.filesService.storeFile(file, 'dataroom_item');
+
     return this.filesService.create({
       title: createFileDto.title,
       uploader: currentUser.displayName,
-      filename: file.filename,
+      filename: storedFile.storageKey,
       originalname: normalizeOriginalName(file.originalname),
     });
   }
@@ -106,8 +102,8 @@ export default class FilesController {
     const file = await this.filesService.findOne(Number(id));
     if (!file) return res.status(404).send('File not found');
 
-    const filePath = path.join(__dirname, '../../uploads', file.filename);
-    if (!fs.existsSync(filePath)) {
+    const resolvedFile = await this.filesService.resolveStoredFile(file.filename);
+    if (!resolvedFile || !fs.existsSync(resolvedFile.absolutePath)) {
       return res.status(404).send('File not found');
     }
 
@@ -115,7 +111,7 @@ export default class FilesController {
     res.setHeader('Content-Disposition', createDownloadDisposition(downloadName));
     res.setHeader('X-File-Name', encodeURIComponent(downloadName));
 
-    return res.sendFile(filePath);
+    return res.sendFile(resolvedFile.absolutePath);
   }
 
   @Get(':id')

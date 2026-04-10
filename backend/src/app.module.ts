@@ -13,6 +13,9 @@ import { CommentModule } from './post/comment/comment.module';
 import { FilesModule } from './files/files.module';
 import { DataroomModule } from './dataroom/dataroom.module';
 import { AiClientModule } from './ai-client/ai-client.module';
+import { JobsModule } from './jobs/jobs.module';
+import { CoverLetterModule } from './cover-letter/cover-letter.module';
+import { InterviewModule } from './interview/interview.module';
 
 @Module({
   imports: [
@@ -34,6 +37,9 @@ import { AiClientModule } from './ai-client/ai-client.module';
     FilesModule,
     DataroomModule,
     AiClientModule,
+    JobsModule,
+    CoverLetterModule,
+    InterviewModule,
   ],
   controllers: [AppController],
   providers: [AppService],

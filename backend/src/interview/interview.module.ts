@@ -1,14 +1,17 @@
-// src/interview/interview.module.ts
-
 import { Module } from '@nestjs/common';
-import { InterviewService } from './interview.service';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { AiClientModule } from '../ai-client/ai-client.module';
 import { InterviewController } from './interview.controller';
-import { OpenAIService } from '../openai/openai.service';
-import { ConfigModule } from '@nestjs/config';
+import { InterviewService } from './interview.service';
+import { InterviewSession } from './entities/interview-session.entity';
+import { InterviewTurn } from './entities/interview-turn.entity';
 
 @Module({
-  imports: [ConfigModule],
+  imports: [
+    AiClientModule,
+    TypeOrmModule.forFeature([InterviewSession, InterviewTurn]),
+  ],
   controllers: [InterviewController],
-  providers: [InterviewService, OpenAIService],
+  providers: [InterviewService],
 })
-export class InterviewModule {} // ✅ 클래스 이름을 정확히 모듈 이름으로!
+export class InterviewModule {}

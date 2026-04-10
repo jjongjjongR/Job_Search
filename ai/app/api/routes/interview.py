@@ -27,17 +27,17 @@ router = APIRouter(
 
 # 2026.04.01 이종헌: 수정(서비스 분리)
 @router.post("/start", response_model=InterviewStartResponse)
-def interview_start(payload: InterviewStartRequest) -> InterviewStartResponse:
-    return interview_start_service(payload)
+async def interview_start(payload: InterviewStartRequest) -> InterviewStartResponse:
+    return await interview_start_service(payload)
 
 
 # 2026.04.01 이종헌: 수정(서비스 분리)
 @router.post("/answer", response_model=InterviewAnswerResponse)
-def interview_answer(payload: InterviewAnswerRequest) -> InterviewAnswerResponse:
-    return interview_answer_service(payload)
+async def interview_answer(payload: InterviewAnswerRequest) -> InterviewAnswerResponse:
+    return await interview_answer_service(payload)
 
 
 # 2026.04.01 이종헌: 수정(서비스 분리)
 @router.post("/finish", response_model=InterviewFinishResponse)
-def interview_finish(payload: InterviewFinishRequest) -> InterviewFinishResponse:
-    return interview_finish_service(payload)
+async def interview_finish(payload: InterviewFinishRequest) -> InterviewFinishResponse:
+    return await interview_finish_service(payload)
