@@ -5,8 +5,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { CreateDataroomDto } from './dto/create-dataroom.dto';
 import { Dataroom } from './entities/dataroom.entity';
-import { FilesService } from 'src/files/files.service';
-import { normalizeOriginalName } from 'src/files/utils/file-name.util';
+import { FilesService } from '../files/files.service';
+import { normalizeOriginalName } from '../files/utils/file-name.util';
 
 @Injectable()
 export class DataroomService {
