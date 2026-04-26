@@ -59,6 +59,28 @@ class CoverLetterFeedbackRequest(BaseModel):
     documents: CoverLetterDocumentsInput = Field(description="자소서/이력서/포트폴리오 텍스트")
 
 
+class CoverLetterQuestionScore(BaseModel):
+    questionNumber: int = Field(description="문항 번호")
+    title: str = Field(description="문항 제목")
+    score: int = Field(description="문항 점수")
+    feedback: str = Field(description="문항별 짧은 피드백")
+
+
+class CoverLetterRubricScore(BaseModel):
+    category: str = Field(description="평가 항목명")
+    score: int = Field(description="항목 점수")
+    maxScore: int = Field(description="항목 최대 점수")
+    evidenceText: str = Field(description="점수 근거 문장")
+    evidenceSource: str = Field(description="근거 출처. JD, coverLetter, resume, portfolio 등")
+    verified: bool = Field(description="서버가 실제 입력 문서 안 근거 존재를 확인했는지 여부")
+
+
+class CoverLetterRagEvidence(BaseModel):
+    source: str = Field(description="근거 출처. JD, coverLetter, resume, portfolio")
+    text: str = Field(description="검색된 근거 chunk")
+    score: float = Field(description="벡터 검색 유사도 점수")
+
+
 class CoverLetterFeedbackResponse(BaseModel):
     """
     2026.04.01 이종헌: 신규
@@ -66,7 +88,27 @@ class CoverLetterFeedbackResponse(BaseModel):
     """
 
     totalScore: int = Field(description="종합 점수")
+    jdAlignmentScore: int = Field(description="JD 반영도 점수")
+    jobFitScore: int = Field(description="직무 적합도 점수")
+    confidence: float = Field(description="점수 신뢰도 0.0~1.0")
+    verifiedJdKeywords: list[str] = Field(
+        default_factory=list,
+        description="JD 원문 안에서 확인된 평가 기준 키워드",
+    )
+    rubricScores: list[CoverLetterRubricScore] = Field(
+        default_factory=list,
+        description="근거 검증이 포함된 항목별 점수",
+    )
+    ragEvidence: list[CoverLetterRagEvidence] = Field(
+        default_factory=list,
+        description="벡터 DB 기반 RAG로 검색된 상위 근거",
+    )
     summary: str = Field(description="전체 요약")
+    revisedDraft: str = Field(description="현재 자료를 바탕으로 만든 자소서 수정 초안")
+    questionScores: list[CoverLetterQuestionScore] = Field(
+        default_factory=list,
+        description="문항별 점수와 짧은 피드백",
+    )
     strengths: list[str] = Field(
         default_factory=list,
         description="강점 3개 정도를 담는 배열",

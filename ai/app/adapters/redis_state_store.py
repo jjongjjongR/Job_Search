@@ -68,17 +68,25 @@ class RedisInterviewStateStore:
             return 0
         return int(payload.get("retryCount", 0))
 
+    async def list_hidden_scores(self, session_id: str) -> list[dict[str, Any]]:
+        client = await self._client()
+        keys = sorted(await client.keys(f"interview:session:{session_id}:hidden-score:*"))
+        payloads: list[dict[str, Any]] = []
+        for key in keys:
+            value = await client.get(key)
+            if value:
+                payloads.append(json.loads(value))
+        await client.aclose()
+        return payloads
+
     async def refresh_session_ttl(self, session_id: str) -> None:
         client = await self._client()
         keys = [
             self._session_state_key(session_id),
             self._cleanup_key(session_id),
         ]
-        transcript_keys = await client.keys(f"interview:session:{session_id}:transcript:*")
-        vision_keys = await client.keys(f"interview:session:{session_id}:vision:*")
-        hidden_keys = await client.keys(f"interview:session:{session_id}:hidden-score:*")
-        retry_keys = await client.keys(f"interview:session:{session_id}:stt-retry:*")
-        for key in [*keys, *transcript_keys, *vision_keys, *hidden_keys, *retry_keys]:
+        artifact_keys = await self._artifact_keys(client, session_id)
+        for key in [*keys, *artifact_keys]:
             await client.expire(key, self.default_ttl_seconds)
         await client.aclose()
 
@@ -99,19 +107,54 @@ class RedisInterviewStateStore:
             self._session_state_key(session_id),
             self._cleanup_key(session_id),
         ]
-        transcript_keys = await client.keys(f"interview:session:{session_id}:transcript:*")
-        vision_keys = await client.keys(f"interview:session:{session_id}:vision:*")
-        hidden_keys = await client.keys(f"interview:session:{session_id}:hidden-score:*")
-        retry_keys = await client.keys(f"interview:session:{session_id}:stt-retry:*")
-        if transcript_keys or vision_keys or hidden_keys or retry_keys or keys:
+        artifact_keys = await self._artifact_keys(client, session_id)
+        if artifact_keys or keys:
             await client.delete(
                 *keys,
-                *transcript_keys,
-                *vision_keys,
-                *hidden_keys,
-                *retry_keys,
+                *artifact_keys,
             )
         await client.aclose()
+
+    async def list_due_cleanup_session_ids(
+        self,
+        now: datetime | None = None,
+    ) -> list[str]:
+        client = await self._client()
+        current_time = now or datetime.now(timezone.utc)
+        session_ids: list[str] = []
+
+        try:
+            async for key in client.scan_iter(match="interview:session:*:cleanup"):
+                payload_raw = await client.get(key)
+                if not payload_raw:
+                    continue
+
+                try:
+                    payload = json.loads(payload_raw)
+                    deadline_text = str(payload.get("cleanupDeadline") or "").strip()
+                    deadline = datetime.fromisoformat(deadline_text)
+                    if deadline.tzinfo is None:
+                        deadline = deadline.replace(tzinfo=timezone.utc)
+                except (TypeError, ValueError, json.JSONDecodeError):
+                    deadline = current_time
+
+                if deadline <= current_time:
+                    session_id = self._session_id_from_cleanup_key(key)
+                    if session_id:
+                        session_ids.append(session_id)
+        finally:
+            await client.aclose()
+
+        return sorted(set(session_ids))
+
+    async def cleanup_due_sessions(
+        self,
+        now: datetime | None = None,
+    ) -> list[str]:
+        session_ids = await self.list_due_cleanup_session_ids(now=now)
+        for session_id in session_ids:
+            await self.delete_session_artifacts(session_id)
+        return session_ids
 
     async def _set_json(
         self,
@@ -141,6 +184,20 @@ class RedisInterviewStateStore:
 
         return from_url(self.redis_url, decode_responses=True)
 
+    async def _artifact_keys(self, client, session_id: str) -> list[str]:
+        patterns = [
+            f"interview:session:{session_id}:transcript:*",
+            f"interview:session:{session_id}:raw-transcript:*",
+            f"interview:session:{session_id}:vision:*",
+            f"interview:session:{session_id}:raw-vision:*",
+            f"interview:session:{session_id}:hidden-score:*",
+            f"interview:session:{session_id}:stt-retry:*",
+        ]
+        keys: list[str] = []
+        for pattern in patterns:
+            keys.extend(await client.keys(pattern))
+        return keys
+
     def _session_state_key(self, session_id: str) -> str:
         return f"interview:session:{session_id}:state"
 
@@ -158,6 +215,13 @@ class RedisInterviewStateStore:
 
     def _cleanup_key(self, session_id: str) -> str:
         return f"interview:session:{session_id}:cleanup"
+
+    def _session_id_from_cleanup_key(self, key: str) -> str | None:
+        prefix = "interview:session:"
+        suffix = ":cleanup"
+        if not key.startswith(prefix) or not key.endswith(suffix):
+            return None
+        return key[len(prefix) : -len(suffix)] or None
 
 
 redis_interview_state_store = RedisInterviewStateStore(

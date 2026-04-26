@@ -2,6 +2,14 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsOptional, IsString, IsUrl } from 'class-validator';
 
 export class AnalyzeJobRequestDto {
+  @ApiPropertyOptional({
+    description: '분석할 공고 URL(jobUrl 별칭)',
+    example: 'https://example.com/jobs/backend-engineer',
+  })
+  @IsOptional()
+  @IsUrl()
+  jobPostingUrl?: string;
+
   // 2026-04-10 신규: URL 기반 공고 분석 요청을 Swagger와 검증 규칙으로 노출
   @ApiPropertyOptional({
     description: '분석할 공고 URL',

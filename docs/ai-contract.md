@@ -30,7 +30,10 @@ Request JSON:
 
 ```json
 {
+  "jobUrl": "https://example.com/jobs/123",
   "jobPostingUrl": "https://example.com/jobs/123",
+  "manualCompanyName": "OpenAI Korea",
+  "manualJobTitle": "Backend Engineer",
   "manualJdText": ""
 }
 ```
@@ -57,6 +60,11 @@ Request JSON:
 ```json
 {
   "jobAnalysisRequestId": "jar-001",
+  "documents": {
+    "coverLetterText": "안녕하세요. 백엔드 개발자로...",
+    "resumeText": "경력 요약...",
+    "portfolioText": "프로젝트 요약..."
+  },
   "coverLetterDocumentId": "doc-cover-001",
   "resumeDocumentId": "doc-resume-001",
   "portfolioDocumentId": "doc-portfolio-001"
@@ -185,7 +193,9 @@ Response JSON:
 {
   "turnNumber": 1,
   "answerType": "VIDEO",
-  "answerVideoFileId": "temp-video-001"
+  "answerVideoStorageKey": "temp/interview_answer_upload/1714000000000-answer.webm",
+  "videoDurationSeconds": 18.5,
+  "hasAudio": true
 }
 ```
 
@@ -206,10 +216,10 @@ Response JSON:
   "sessionId": "ivs-001",
   "turnNumber": 1,
   "evaluation": {
-    "answer_full_text": "안녕하세요. 백엔드 직무에 지원한 홍길동입니다.",
-    "feedback_text": "지원 동기는 보였지만 프로젝트 근거를 더 말하면 좋습니다.",
-    "nonverbal_summary_text": "얼굴 유지율은 안정적이었고 큰 장해 요소는 없었습니다.",
-    "vision_result_status": "VALID"
+    "answerFullText": "안녕하세요. 백엔드 직무에 지원한 홍길동입니다.",
+    "feedbackText": "지원 동기는 보였지만 프로젝트 근거를 더 말하면 좋습니다.",
+    "nonverbalSummaryText": "얼굴 유지율은 안정적이었고 큰 장해 요소는 없었습니다.",
+    "visionResultStatus": "VALID"
   },
   "decision": {
     "type": "FOLLOW_UP",
@@ -336,6 +346,7 @@ Request JSON:
 ```json
 {
   "userId": "user-001",
+  "jobUrl": "https://example.com/jobs/123",
   "jobPostingUrl": "https://example.com/jobs/123",
   "manualJdText": ""
 }

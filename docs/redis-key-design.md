@@ -134,11 +134,14 @@
   - `save_stt_retry_count`
   - `get_stt_retry_count`
   - `refresh_session_ttl`
-  - `schedule_cleanup`
+- `schedule_cleanup`
+- `list_due_cleanup_session_ids`
+- `cleanup_due_sessions`
   - `delete_session_artifacts`
 - 기본 TTL:
   - `REDIS_DEFAULT_TTL_SECONDS`
   - 기본값 `600`
+  - cleanup worker polling interval: `REDIS_CLEANUP_INTERVAL_SECONDS`
 
 ## 6. 서비스 연결 기준
 
@@ -150,3 +153,6 @@
 - `POST /internal/interview/finish`
   - cleanup key 저장
   - 10분 삭제 기준 시각 기록
+- FastAPI lifespan worker
+  - `ai/app/services/interview/cleanup_service.py`
+  - due cleanup key를 주기적으로 스캔해 만료된 세션 임시값을 실제 삭제

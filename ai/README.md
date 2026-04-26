@@ -1,7 +1,15 @@
 # AI Server
 
-이 디렉터리는 `Next.js -> NestJS -> FastAPI` 구조에서 FastAPI 내부 AI 서버 뼈대다.
-현재 단계에서는 실제 LLM/STT/Vision 로직 없이 더미 응답으로 동작한다.
+이 디렉터리는 `Next.js -> NestJS -> FastAPI` 구조에서 FastAPI 내부 AI 서버를 담는다.
+
+현재 코드 기준으로는 아래 기능이 구현되어 있다.
+
+- 공고 분석 내부 API
+- 자소서 피드백 내부 API
+- 면접 세션 시작/답변/종료 내부 API
+- 자소서 RAG + LangGraph 흐름
+- 면접 질문 계획, 답변 평가, STT fallback, Vision 보조 평가 규칙
+- Redis temp state helper
 
 ## 실행 방법
 
@@ -29,13 +37,3 @@ pytest
 - `POST /internal/interview/start`
 - `POST /internal/interview/answer`
 - `POST /internal/interview/finish`
-
-## 현재 더미 구현인 부분
-
-- 공고 분석
-- 자소서 피드백 생성
-- 면접 세션 시작
-- 면접 답변 처리
-- 면접 세션 종료
-- STT / Vision / TTS 서비스
-- storage / temp state / llm adapter

@@ -31,29 +31,74 @@ export class InterviewDocumentsDto {
 }
 
 export class StartInterviewSessionRequestDto {
-  // 2026-04-10 신규: 면접 시작 시 회사명을 필수 입력으로 정의
-  @ApiProperty({ description: '회사명', example: 'OpenAI Korea' })
+  // 2026.04.25 수정: 자료 기준에 맞춰 저장된 공고 분석 결과 ID로 면접 세션 시작 가능하게 추가
+  @ApiPropertyOptional({ description: '공고 분석 요청 ID', example: 'jar-001' })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  companyName!: string;
+  jobAnalysisRequestId?: string;
 
-  // 2026-04-10 신규: 면접 시작 시 직무명을 필수 입력으로 정의
-  @ApiProperty({ description: '직무명', example: 'Backend Engineer' })
+  // 2026.04.25 신규: 자료 기준 선택 문서 ID 입력을 받을 수 있게 추가
+  @ApiPropertyOptional({ description: '이력서 문서 ID', example: 'doc-resume-001' })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  positionName!: string;
+  resumeDocumentId?: string;
 
-  // 2026-04-10 신규: JD 본문을 FastAPI로 전달하기 위한 필수 입력
-  @ApiProperty({ description: 'JD 본문' })
+  // 2026.04.25 신규: 자료 기준 선택 문서 ID 입력을 받을 수 있게 추가
+  @ApiPropertyOptional({ description: '자소서 문서 ID', example: 'doc-cover-001' })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  jdText!: string;
+  coverLetterDocumentId?: string;
+
+  // 2026.04.25 신규: 자료 기준 선택 문서 ID 입력을 받을 수 있게 추가
+  @ApiPropertyOptional({ description: '포트폴리오 문서 ID', example: 'doc-portfolio-001' })
+  @IsOptional()
+  @IsString()
+  portfolioDocumentId?: string;
+
+  // 2026-04-10 신규: 면접 시작 시 회사명을 직접 입력하는 fallback 경로 유지
+  @ApiPropertyOptional({ description: '회사명', example: 'OpenAI Korea' })
+  @IsOptional()
+  @IsString()
+  companyName?: string;
+
+  // 2026-04-10 신규: 면접 시작 시 직무명을 직접 입력하는 fallback 경로 유지
+  @ApiPropertyOptional({ description: '직무명', example: 'Backend Engineer' })
+  @IsOptional()
+  @IsString()
+  positionName?: string;
+
+  // 2026-04-10 신규: JD 본문 직접 입력 fallback 유지
+  @ApiPropertyOptional({ description: 'JD 본문' })
+  @IsOptional()
+  @IsString()
+  jdText?: string;
 
   // 2026-04-10 신규: 참고 문서 텍스트 묶음을 입력 구조에 포함
-  @ApiProperty({ type: InterviewDocumentsDto })
+  @ApiPropertyOptional({ type: InterviewDocumentsDto })
+  @IsOptional()
   @ValidateNested()
   @Type(() => InterviewDocumentsDto)
-  documents!: InterviewDocumentsDto;
+  documents?: InterviewDocumentsDto;
+}
+
+export class UploadInterviewAnswerResponseDto {
+  // 2026.04.25 신규: 면접 답변 임시 업로드 후 사용할 storage key를 응답에 포함
+  @ApiProperty({
+    description: '임시 저장된 면접 답변 영상 storage key',
+    example: 'temp/interview_answer_upload/1714000000000-answer.webm',
+  })
+  @IsString()
+  storageKey!: string;
+
+  // 2026.04.25 신규: 원본 파일명을 응답에 포함
+  @ApiProperty({ description: '원본 파일명', example: 'answer.webm' })
+  @IsString()
+  originalName!: string;
+
+  // 2026.04.25 신규: 파일 크기를 응답에 포함
+  @ApiProperty({ description: '파일 크기(byte)', example: 1048576 })
+  @IsInt()
+  size!: number;
 }
 
 export class InterviewQuestionDto {
@@ -124,6 +169,52 @@ export class SubmitInterviewAnswerRequestDto {
   @IsOptional()
   @IsString()
   answerText?: string;
+
+  // 2026-04-21 신규: 영상 전사 힌트를 테스트와 임시 STT fallback 검증에 사용
+  @ApiPropertyOptional({ description: '임시 전사 텍스트 또는 테스트 힌트' })
+  @IsOptional()
+  @IsString()
+  transcriptHint?: string;
+
+  // 2026-04-21 신규: 11단계 규칙용 영상 길이 메타데이터
+  @ApiPropertyOptional({ description: '영상 길이(초)', example: 12.5 })
+  @IsOptional()
+  videoDurationSeconds?: number;
+
+  // 2026-04-21 신규: 오디오 유무를 STT fallback 판단에 반영
+  @ApiPropertyOptional({ description: '오디오 포함 여부', example: true })
+  @IsOptional()
+  hasAudio?: boolean;
+
+  // 2026-04-21 신규: 심한 잡음 여부를 STT fallback 판단에 반영
+  @ApiPropertyOptional({ description: '심한 잡음 여부', example: false })
+  @IsOptional()
+  severeNoise?: boolean;
+
+  // 2026-04-21 신규: Vision 최소 평가용 얼굴 유지율
+  @ApiPropertyOptional({ description: '얼굴 유지율', example: 0.84 })
+  @IsOptional()
+  faceDetectedRatio?: number;
+
+  // 2026-04-21 신규: 다중 얼굴 검출 여부
+  @ApiPropertyOptional({ description: '다중 얼굴 검출 여부', example: false })
+  @IsOptional()
+  multiFaceDetected?: boolean;
+
+  // 2026-04-21 신규: 저조도 여부
+  @ApiPropertyOptional({ description: '저조도 여부', example: false })
+  @IsOptional()
+  lowLight?: boolean;
+
+  // 2026-04-21 신규: 가림 여부
+  @ApiPropertyOptional({ description: '가림 여부', example: false })
+  @IsOptional()
+  obstructionDetected?: boolean;
+
+  // 2026-04-21 신규: 정면 응시 proxy 안정 여부
+  @ApiPropertyOptional({ description: '정면 응시 proxy 안정 여부', example: true })
+  @IsOptional()
+  gazeStable?: boolean;
 }
 
 export class InterviewDecisionNextQuestionDto {
@@ -155,6 +246,12 @@ export class InterviewDecisionDto {
   @IsInt()
   followUpCountForCurrentQuestion?: number | null;
 
+  // 2026-04-21 신규: 재업로드/텍스트 전환 판단 시 현재 재시도 횟수를 응답에 노출
+  @ApiPropertyOptional({ description: '현재 재시도 횟수', example: 1 })
+  @IsOptional()
+  @IsInt()
+  retryCount?: number | null;
+
   // 2026-04-10 신규: 다음 질문 정보가 있을 때 함께 반환
   @ApiPropertyOptional({ type: InterviewDecisionNextQuestionDto })
   @IsOptional()
@@ -178,6 +275,11 @@ export class InterviewEvaluationDto {
   @ApiProperty({ description: '비언어 평가 요약' })
   @IsString()
   nonverbalSummaryText!: string;
+
+  // 2026.04.25 신규: 자료 기준 응답에 맞춰 Vision 상태값을 함께 노출
+  @ApiProperty({ description: 'Vision 보조 평가 상태', example: 'VALID' })
+  @IsString()
+  visionResultStatus!: string;
 }
 
 export class SubmitInterviewAnswerResponseDto {
@@ -242,6 +344,40 @@ export class InterviewFinalReportDto {
   @ApiProperty({ description: '연습 방향 목록', type: [String] })
   @IsArray()
   practiceDirections!: string[];
+
+  // 2026.04.25 신규: 자료 기준 질문 목록-답변을 최종 리포트 응답에 포함
+  @ApiProperty({
+    description: '질문 목록-답변',
+    type: [Object],
+    example: [{ turnNumber: 1, questionText: '1분 자기소개 부탁드립니다.', answerFullText: '...' }],
+  })
+  @IsArray()
+  questionAnswers!: Array<{
+    turnNumber: number;
+    questionText: string;
+    answerFullText: string;
+  }>;
+
+  // 2026.04.25 신규: 자료 기준 턴별 피드백을 최종 리포트 응답에 포함
+  @ApiProperty({
+    description: '턴별 피드백',
+    type: [Object],
+    example: [
+      {
+        turnNumber: 1,
+        questionText: '1분 자기소개 부탁드립니다.',
+        feedbackText: '...',
+        nonverbalSummaryText: '...',
+      },
+    ],
+  })
+  @IsArray()
+  turnFeedbacks!: Array<{
+    turnNumber: number;
+    questionText: string;
+    feedbackText: string;
+    nonverbalSummaryText: string;
+  }>;
 }
 
 export class FinishInterviewSessionResponseDto {
@@ -303,6 +439,15 @@ export class InterviewSessionSummaryDto {
   @IsOptional()
   @IsString()
   finishedAt?: string | null;
+}
+
+export class InterviewSessionDetailDto extends InterviewSessionSummaryDto {
+  // 2026.04.25 신규: 종료된 세션은 재조회 시 최종 리포트를 함께 반환
+  @ApiPropertyOptional({ type: InterviewFinalReportDto })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => InterviewFinalReportDto)
+  finalReport?: InterviewFinalReportDto | null;
 }
 
 export class InterviewTurnDto {

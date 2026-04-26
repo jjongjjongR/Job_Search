@@ -10,7 +10,11 @@ import {
 import { CoverLetterReport } from './entities/cover-letter-report.entity';
 import { CoverLetterReportDetailDto, CoverLetterReportSummaryDto } from './dto/cover-letter-report.dto';
 import { JobsService } from '../jobs/jobs.service';
-import { extractTextFromUploadedFile } from './utils/document-text-extractor';
+import { FilesService } from '../files/files.service';
+import {
+  extractTextFromStoredFile,
+  extractTextFromUploadedFile,
+} from './utils/document-text-extractor';
 
 interface CoverLetterUploadedFiles {
   coverLetterFile?: Express.Multer.File;
@@ -23,6 +27,7 @@ export class CoverLetterService {
   constructor(
     private readonly aiClientService: AiClientService,
     private readonly jobsService: JobsService,
+    private readonly filesService: FilesService,
     @InjectRepository(CoverLetterReport)
     private readonly coverLetterReportRepository: Repository<CoverLetterReport>,
   ) {}
@@ -36,7 +41,7 @@ export class CoverLetterService {
     const resolvedJobAnalysis =
       payload.jobAnalysis ?? (await this.resolveJobAnalysis(payload.jobAnalysisRequestId));
     const normalizedDocuments = await this.normalizeDocuments(
-      payload.documents,
+      payload,
       uploadedFiles,
     );
     const response = await this.aiClientService.createCoverLetterFeedback({
@@ -53,7 +58,15 @@ export class CoverLetterService {
       companyName: resolvedJobAnalysis.companyName,
       jobTitle: resolvedJobAnalysis.positionName,
       totalScore: response.totalScore,
+      jdAlignmentScore: response.jdAlignmentScore,
+      jobFitScore: response.jobFitScore,
+      confidence: response.confidence,
+      verifiedJdKeywordsJson: response.verifiedJdKeywords,
       summaryText: response.summary,
+      revisedDraftText: response.revisedDraft,
+      questionScoresJson: response.questionScores,
+      rubricScoresJson: response.rubricScores,
+      ragEvidenceJson: response.ragEvidence,
       strengthsJson: response.strengths,
       weaknessesJson: response.weaknesses,
       guideJson: response.revisionDirections,
@@ -65,7 +78,15 @@ export class CoverLetterService {
       companyName: resolvedJobAnalysis.companyName,
       positionName: resolvedJobAnalysis.positionName,
       totalScore: response.totalScore,
+      jdAlignmentScore: response.jdAlignmentScore,
+      jobFitScore: response.jobFitScore,
+      confidence: response.confidence,
+      verifiedJdKeywords: response.verifiedJdKeywords,
+      rubricScores: response.rubricScores,
+      ragEvidence: response.ragEvidence,
       summary: response.summary,
+      revisedDraft: response.revisedDraft,
+      questionScores: response.questionScores,
       strengths: response.strengths,
       weaknesses: response.weaknesses,
       revisionDirections: response.revisionDirections,
@@ -108,13 +129,35 @@ export class CoverLetterService {
       companyName: report.companyName,
       positionName: report.jobTitle,
       totalScore: report.totalScore,
+      jdAlignmentScore: report.jdAlignmentScore ?? 0,
+      jobFitScore: report.jobFitScore ?? 0,
+      confidence: report.confidence ?? 0,
+      verifiedJdKeywords: report.verifiedJdKeywordsJson ?? [],
+      rubricScores: report.rubricScoresJson ?? [],
+      ragEvidence: report.ragEvidenceJson ?? [],
       summary: report.summaryText,
+      revisedDraft: report.revisedDraftText ?? '',
+      questionScores: report.questionScoresJson ?? [],
       strengths: report.strengthsJson,
       weaknesses: report.weaknessesJson,
       revisionDirections: report.guideJson,
       nextActions: report.guideJson,
       createdAt: report.createdAt.toISOString(),
     };
+  }
+
+  // 2026-04-15 신규: 마이페이지에서 저장된 자소서 리포트를 삭제
+  async deleteReport(userId: string, reportId: string): Promise<void> {
+    const report = await this.coverLetterReportRepository.findOneBy({
+      id: reportId,
+      userId,
+    });
+
+    if (!report) {
+      throw new NotFoundException('자소서 리포트를 찾을 수 없습니다.');
+    }
+
+    await this.coverLetterReportRepository.remove(report);
   }
 
   // 2026-04-10 신규: 공고 분석 ID로 실제 기준 정보를 채우는 헬퍼
@@ -133,17 +176,25 @@ export class CoverLetterService {
 
   // 2026-04-10 신규: 직접 입력 텍스트와 파일 추출 텍스트 중 실제 평가에 사용할 값을 정리
   private async normalizeDocuments(
-    documents: CoverLetterFeedbackRequestDto['documents'] | undefined,
+    payload: CoverLetterFeedbackRequestDto,
     uploadedFiles?: CoverLetterUploadedFiles,
   ): Promise<{
     coverLetterText?: string;
     coverLetterFileText?: string;
     resumeText?: string;
     resumeFileText?: string;
-    portfolioText?: string;
-    portfolioFileText?: string;
+      portfolioText?: string;
+      portfolioFileText?: string;
   }> {
-    const safeDocuments = documents ?? {};
+    const safeDocuments = payload.documents ?? {};
+    const coverLetterDocumentText =
+      safeDocuments.coverLetterText?.trim() ||
+      (await this.resolveDocumentTextById(payload.coverLetterDocumentId));
+    const resumeDocumentText =
+      safeDocuments.resumeText?.trim() || (await this.resolveDocumentTextById(payload.resumeDocumentId));
+    const portfolioDocumentText =
+      safeDocuments.portfolioText?.trim() ||
+      (await this.resolveDocumentTextById(payload.portfolioDocumentId));
     const coverLetterFileText =
       safeDocuments.coverLetterFileText?.trim() ||
       (uploadedFiles?.coverLetterFile
@@ -161,7 +212,7 @@ export class CoverLetterService {
         : undefined);
 
     const coverLetterText = (
-      safeDocuments.coverLetterText ?? coverLetterFileText ?? ''
+      coverLetterDocumentText ?? coverLetterFileText ?? ''
     ).trim();
     if (!coverLetterText) {
       throw new BadRequestException(
@@ -170,13 +221,44 @@ export class CoverLetterService {
     }
 
     return {
-      coverLetterText: safeDocuments.coverLetterText?.trim() || undefined,
+      coverLetterText: coverLetterDocumentText || undefined,
       coverLetterFileText: coverLetterFileText || undefined,
-      resumeText: safeDocuments.resumeText?.trim() || undefined,
+      resumeText: resumeDocumentText || undefined,
       resumeFileText: resumeFileText || undefined,
-      portfolioText: safeDocuments.portfolioText?.trim() || undefined,
+      portfolioText: portfolioDocumentText || undefined,
       portfolioFileText: portfolioFileText || undefined,
     };
+  }
+
+  private async resolveDocumentTextById(documentId?: string) {
+    if (!documentId) {
+      return undefined;
+    }
+
+    const matched = documentId.match(/(\d+)$/);
+    if (!matched) {
+      return undefined;
+    }
+
+    const file = await this.filesService.findOne(Number(matched[1]));
+    if (!file) {
+      return undefined;
+    }
+
+    const resolved = await this.filesService.resolveStoredFile(file.filename);
+    if (!resolved) {
+      return undefined;
+    }
+
+    try {
+      const extractedText = await extractTextFromStoredFile(
+        resolved.absolutePath,
+        file.originalname,
+      );
+      return extractedText || undefined;
+    } catch {
+      return undefined;
+    }
   }
 
   // 2026-04-10 신규: 사람이 읽기 쉬운 자소서 리포트 ID 형식 유지

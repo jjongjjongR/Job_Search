@@ -1,8 +1,12 @@
 import {
+  BadRequestException,
   GatewayTimeoutException,
+  HttpException,
   Injectable,
   InternalServerErrorException,
+  NotFoundException,
   ServiceUnavailableException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
@@ -16,7 +20,8 @@ export class AiClientService {
   private readonly baseUrl: string;
   private readonly sharedSecret: string;
   // 2026-04-10 신규: 내부 AI 서버 타임아웃 시간을 한 곳에서 관리
-  private readonly requestTimeoutMs = 5000;
+  // 2026-04-11 수정: OpenAI 기반 공고 분석 응답 시간을 감안해 내부 AI 타임아웃을 확장
+  private readonly requestTimeoutMs = 30000;
   // 2026-04-10 신규: 일시적 실패 시 한 번 더 시도하도록 재시도 횟수 추가
   private readonly retryCount = 1;
 
@@ -65,14 +70,12 @@ export class AiClientService {
         });
 
         if (!response.ok) {
-          throw new InternalServerErrorException(
-            '내부 AI 서버 호출에 실패했습니다.',
-          );
+          throw await this.mapInternalError(response);
         }
 
         return response.json();
       } catch (error) {
-        if (error instanceof InternalServerErrorException) {
+        if (error instanceof HttpException) {
           throw error;
         }
 
@@ -95,5 +98,77 @@ export class AiClientService {
         );
       }
     }
+  }
+
+  private async mapInternalError(response: Response): Promise<HttpException> {
+    const errorBody = await response
+      .json()
+      .catch(() => ({ message: '내부 AI 서버 호출에 실패했습니다.' }));
+
+    const detail =
+      errorBody && typeof errorBody.detail === 'object' && errorBody.detail
+        ? errorBody.detail
+        : null;
+    const message =
+      typeof errorBody?.detail === 'string'
+        ? errorBody.detail
+        : typeof detail?.message === 'string'
+          ? detail.message
+          : typeof errorBody?.message === 'string'
+            ? errorBody.message
+            : '내부 AI 서버 호출에 실패했습니다.';
+
+    if (response.status === 400 || response.status === 422) {
+      throw new BadRequestException(
+        detail ?? {
+          errorCode: 'BAD_REQUEST',
+          message,
+          retryable: false,
+          details: errorBody,
+        },
+      );
+    }
+
+    if (response.status === 404) {
+      throw new NotFoundException(
+        detail ?? {
+          errorCode: 'NOT_FOUND',
+          message,
+          retryable: false,
+          details: errorBody,
+        },
+      );
+    }
+
+    if (response.status === 401) {
+      throw new UnauthorizedException(
+        detail ?? {
+          errorCode: 'INTERNAL_AUTH_INVALID',
+          message,
+          retryable: false,
+          details: errorBody,
+        },
+      );
+    }
+
+    if (response.status >= 500) {
+      throw new ServiceUnavailableException(
+        detail ?? {
+          errorCode: 'AI_INTERNAL_UNAVAILABLE',
+          message,
+          retryable: true,
+          details: errorBody,
+        },
+      );
+    }
+
+    throw new InternalServerErrorException(
+      detail ?? {
+        errorCode: 'AI_INTERNAL_ERROR',
+        message,
+        retryable: false,
+        details: errorBody,
+      },
+    );
   }
 }

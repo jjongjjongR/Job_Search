@@ -38,7 +38,11 @@ export class JobsService {
     userId: string,
     payload: AnalyzeJobRequestDto,
   ): Promise<AnalyzeJobResponseDto> {
-    const response = await this.aiClientService.analyzeJob(payload);
+    const normalizedPayload = {
+      ...payload,
+      jobUrl: payload.jobUrl ?? payload.jobPostingUrl,
+    };
+    const response = await this.aiClientService.analyzeJob(normalizedPayload);
     const jobAnalysisRequestId = this.createJobAnalysisRequestId();
 
     // 2026-04-10 수정: 공고 분석 결과를 메모리가 아니라 DB에 저장
@@ -46,7 +50,7 @@ export class JobsService {
       this.jobAnalysisRepository.create({
         id: jobAnalysisRequestId,
         userId,
-        sourceUrl: payload.jobUrl ?? null,
+        sourceUrl: normalizedPayload.jobUrl ?? null,
         companyName: response.companyName,
         jobTitle: response.positionName,
         jdText: response.jdText,

@@ -84,14 +84,50 @@ export class CoverLetterFeedbackRequestDto {
   @Type(() => CoverLetterJobAnalysisDto)
   jobAnalysis?: CoverLetterJobAnalysisDto;
 
+  @ApiPropertyOptional({ description: '자소서 문서 ID', example: 'doc-cover-001' })
+  @IsOptional()
+  @IsString()
+  coverLetterDocumentId?: string;
+
+  @ApiPropertyOptional({ description: '이력서 문서 ID', example: 'doc-resume-001' })
+  @IsOptional()
+  @IsString()
+  resumeDocumentId?: string;
+
+  @ApiPropertyOptional({ description: '포트폴리오 문서 ID', example: 'doc-portfolio-001' })
+  @IsOptional()
+  @IsString()
+  portfolioDocumentId?: string;
+
   // 2026-04-10 신규: 문서 텍스트 묶음을 공개 API 요청 구조에 포함
-  @ApiProperty({ type: CoverLetterDocumentsDto })
+  @ApiPropertyOptional({ type: CoverLetterDocumentsDto })
+  @IsOptional()
   @ValidateNested()
   @Type(() => CoverLetterDocumentsDto)
-  documents!: CoverLetterDocumentsDto;
+  documents?: CoverLetterDocumentsDto;
 }
 
 export class CoverLetterFeedbackResponseDto {
+  @ApiProperty({
+    description: '문항별 점수',
+    example: [
+      {
+        questionNumber: 1,
+        title: '[문항 1] 지원 직무 분야의 전문성을 키우기 위해 노력한 경험',
+        score: 78,
+        feedback: 'JD 키워드 연결이 어느 정도 보입니다',
+      },
+    ],
+    type: [Object],
+  })
+  @IsArray()
+  questionScores!: {
+    questionNumber: number;
+    title: string;
+    score: number;
+    feedback: string;
+  }[];
+
   // 2026-04-10 신규: 현재 단계에서도 리포트 식별자를 응답에 포함
   @ApiProperty({ description: '리포트 ID', example: 'clr-001' })
   @IsString()
@@ -112,10 +148,51 @@ export class CoverLetterFeedbackResponseDto {
   @IsInt()
   totalScore!: number;
 
+  @ApiProperty({ description: 'JD 반영도 점수', example: 76 })
+  @IsInt()
+  jdAlignmentScore!: number;
+
+  @ApiProperty({ description: '직무 적합도 점수', example: 73 })
+  @IsInt()
+  jobFitScore!: number;
+
+  @ApiProperty({ description: '점수 신뢰도', example: 0.82 })
+  confidence!: number;
+
+  @ApiProperty({ description: 'JD 원문 검증을 통과한 키워드', type: [String] })
+  @IsArray()
+  verifiedJdKeywords!: string[];
+
+  @ApiProperty({
+    description: '근거 검증이 포함된 항목별 점수',
+    type: [Object],
+  })
+  @IsArray()
+  rubricScores!: {
+    category: string;
+    score: number;
+    maxScore: number;
+    evidenceText: string;
+    evidenceSource: string;
+    verified: boolean;
+  }[];
+
+  @ApiProperty({ description: 'RAG 검색 근거', type: [Object] })
+  @IsArray()
+  ragEvidence!: {
+    source: string;
+    text: string;
+    score: number;
+  }[];
+
   // 2026-04-10 신규: 전체 요약을 응답에 포함
   @ApiProperty({ description: '전체 요약' })
   @IsString()
   summary!: string;
+
+  @ApiProperty({ description: '자소서 수정 초안' })
+  @IsString()
+  revisedDraft!: string;
 
   // 2026-04-10 신규: 강점 배열을 응답에 포함
   @ApiProperty({ description: '강점 목록', type: [String] })

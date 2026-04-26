@@ -18,8 +18,58 @@ export class CoverLetterReportSummaryDto {
 }
 
 export class CoverLetterReportDetailDto extends CoverLetterReportSummaryDto {
+  @ApiProperty({
+    type: [Object],
+    example: [
+      {
+        questionNumber: 1,
+        title: '[문항 1] 지원 직무 분야의 전문성을 키우기 위해 노력한 경험',
+        score: 78,
+        feedback: 'JD 키워드 연결이 어느 정도 보입니다',
+      },
+    ],
+  })
+  questionScores!: {
+    questionNumber: number;
+    title: string;
+    score: number;
+    feedback: string;
+  }[];
+
+  @ApiProperty({ example: 76 })
+  jdAlignmentScore!: number;
+
+  @ApiProperty({ example: 73 })
+  jobFitScore!: number;
+
+  @ApiProperty({ example: 0.82 })
+  confidence!: number;
+
+  @ApiProperty({ type: [String] })
+  verifiedJdKeywords!: string[];
+
+  @ApiProperty({ type: [Object] })
+  rubricScores!: {
+    category: string;
+    score: number;
+    maxScore: number;
+    evidenceText: string;
+    evidenceSource: string;
+    verified: boolean;
+  }[];
+
+  @ApiProperty({ type: [Object] })
+  ragEvidence!: {
+    source: string;
+    text: string;
+    score: number;
+  }[];
+
   @ApiProperty()
   summary!: string;
+
+  @ApiProperty()
+  revisedDraft!: string;
 
   @ApiProperty({ type: [String] })
   strengths!: string[];

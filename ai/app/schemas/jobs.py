@@ -12,6 +12,10 @@ class JobAnalyzeRequest(BaseModel):
     - 링크 분석 실패나 직접 입력 흐름에서는 manual* 값을 사용한다.
     """
 
+    jobPostingUrl: str | None = Field(
+        default=None,
+        description="공개 API 계약의 jobUrl 별칭",
+    )
     jobUrl: str | None = Field(
         default=None,
         description="분석할 공고 링크. 있으면 URL 분석 우선",

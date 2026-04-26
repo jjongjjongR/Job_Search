@@ -1,10 +1,13 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
   Param,
   Post,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -13,18 +16,23 @@ import {
   ApiOperation,
   ApiTags,
 } from '@nestjs/swagger';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
+import * as path from 'path';
 import { JwtUser } from '../auth/interfaces/jwt-user.interface';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import {
   FinishInterviewSessionRequestDto,
   FinishInterviewSessionResponseDto,
+  InterviewSessionDetailDto,
   InterviewSessionSummaryDto,
   InterviewTurnDto,
   StartInterviewSessionRequestDto,
   StartInterviewSessionResponseDto,
   SubmitInterviewAnswerRequestDto,
   SubmitInterviewAnswerResponseDto,
+  UploadInterviewAnswerResponseDto,
 } from './dto/interview-session.dto';
 import { InterviewService } from './interview.service';
 
@@ -34,6 +42,40 @@ import { InterviewService } from './interview.service';
 @Controller('ai/interview/sessions')
 export class InterviewController {
   constructor(private readonly interviewService: InterviewService) {}
+
+  // 2026.04.25 신규: 11단계 실제 STT 흐름을 위해 면접 답변 영상을 temp storage에 업로드한다
+  @Post('uploads')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: {
+        fileSize: 120 * 1024 * 1024,
+      },
+      fileFilter: (_req, file, callback) => {
+        const extension = path.extname(file.originalname).toLowerCase();
+        const allowedExtensions = ['.mp4', '.mov', '.webm', '.m4a', '.mp3', '.wav'];
+        if (!allowedExtensions.includes(extension)) {
+          callback(
+            new BadRequestException('면접 답변 업로드는 영상/오디오 파일만 허용됩니다.'),
+            false,
+          );
+          return;
+        }
+        callback(null, true);
+      },
+      storage: memoryStorage(),
+    }),
+  )
+  @ApiOperation({ summary: '면접 답변 임시 업로드' })
+  @ApiCreatedResponse({ type: UploadInterviewAnswerResponseDto })
+  uploadAnswerVideo(
+    @UploadedFile() file: Express.Multer.File,
+  ): Promise<UploadInterviewAnswerResponseDto> {
+    if (!file) {
+      throw new BadRequestException('업로드할 면접 답변 파일이 필요합니다.');
+    }
+
+    return this.interviewService.uploadAnswerVideo(file);
+  }
 
   // 2026-04-10 신규: 면접 세션 시작 공개 API 추가
   @Post('start')
@@ -91,11 +133,11 @@ export class InterviewController {
   // 2026-04-10 신규: 현재 메모리 기준 면접 세션 단건 조회 API 추가
   @Get(':sessionId')
   @ApiOperation({ summary: '면접 세션 단건 조회' })
-  @ApiOkResponse({ type: InterviewSessionSummaryDto })
+  @ApiOkResponse({ type: InterviewSessionDetailDto })
   getSession(
     @CurrentUser() currentUser: JwtUser,
     @Param('sessionId') sessionId: string,
-  ): Promise<InterviewSessionSummaryDto> {
+  ): Promise<InterviewSessionDetailDto> {
     return this.interviewService.getSession(currentUser.userId, sessionId);
   }
 

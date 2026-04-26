@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Post,
@@ -87,5 +88,14 @@ export class CoverLetterController {
     @Param('reportId') reportId: string,
   ): Promise<CoverLetterReportDetailDto> {
     return this.coverLetterService.getReport(currentUser.userId, reportId);
+  }
+
+  @Delete('reports/:reportId')
+  @ApiOperation({ summary: '자소서 리포트 삭제' })
+  deleteReport(
+    @CurrentUser() currentUser: JwtUser,
+    @Param('reportId') reportId: string,
+  ): Promise<void> {
+    return this.coverLetterService.deleteReport(currentUser.userId, reportId);
   }
 }

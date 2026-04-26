@@ -18,6 +18,15 @@ export interface ProcessInterviewAnswerRequest {
   answerType: 'VIDEO' | 'TEXT';
   answerVideoStorageKey?: string;
   answerText?: string;
+  transcriptHint?: string;
+  videoDurationSeconds?: number;
+  hasAudio?: boolean;
+  severeNoise?: boolean;
+  faceDetectedRatio?: number;
+  multiFaceDetected?: boolean;
+  lowLight?: boolean;
+  obstructionDetected?: boolean;
+  gazeStable?: boolean;
 }
 
 export interface FinishInterviewRequest {

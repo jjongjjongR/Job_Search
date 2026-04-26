@@ -39,8 +39,64 @@ export class CoverLetterReport {
   @Column({ name: 'total_score', type: 'integer' })
   totalScore: number;
 
+  @Column({ name: 'jd_alignment_score', type: 'integer', nullable: true })
+  jdAlignmentScore: number | null;
+
+  @Column({ name: 'job_fit_score', type: 'integer', nullable: true })
+  jobFitScore: number | null;
+
+  @Column({ name: 'confidence', type: 'real', nullable: true })
+  confidence: number | null;
+
+  @Column({
+    name: 'verified_jd_keywords_json',
+    type: 'jsonb',
+    default: () => "'[]'::jsonb",
+  })
+  verifiedJdKeywordsJson: string[];
+
   @Column({ name: 'summary_text', type: 'text' })
   summaryText: string;
+
+  @Column({ name: 'revised_draft_text', type: 'text', nullable: true })
+  revisedDraftText: string | null;
+
+  @Column({
+    name: 'question_scores_json',
+    type: 'jsonb',
+    default: () => "'[]'::jsonb",
+  })
+  questionScoresJson: {
+    questionNumber: number;
+    title: string;
+    score: number;
+    feedback: string;
+  }[];
+
+  @Column({
+    name: 'rubric_scores_json',
+    type: 'jsonb',
+    default: () => "'[]'::jsonb",
+  })
+  rubricScoresJson: {
+    category: string;
+    score: number;
+    maxScore: number;
+    evidenceText: string;
+    evidenceSource: string;
+    verified: boolean;
+  }[];
+
+  @Column({
+    name: 'rag_evidence_json',
+    type: 'jsonb',
+    default: () => "'[]'::jsonb",
+  })
+  ragEvidenceJson: {
+    source: string;
+    text: string;
+    score: number;
+  }[];
 
   @Column({ name: 'strengths_json', type: 'jsonb', default: () => "'[]'::jsonb" })
   strengthsJson: string[];

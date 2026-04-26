@@ -10,6 +10,7 @@ from app.schemas.common import (
     InterviewQuestionType,
     InterviewSessionStatus,
     QuestionItem,
+    VisionResultStatus,
 )
 
 
@@ -93,6 +94,47 @@ class InterviewAnswerRequest(BaseModel):
         default=None,
         description="텍스트 답변 내용. TEXT일 때 사용",
     )
+    # 2026-04-21 신규: STT가 아직 외부 엔진과 완전히 연결되지 않은 동안 전사 힌트를 함께 받을 수 있게 추가
+    transcriptHint: str | None = Field(
+        default=None,
+        description="영상 답변에서 얻은 임시 전사 텍스트 또는 테스트용 힌트",
+    )
+    # 2026-04-21 신규: 11단계 실패 규칙을 판단하기 위한 영상 길이 메타데이터
+    videoDurationSeconds: float | None = Field(
+        default=None,
+        description="영상 길이(초). 3초 이하 여부 판단에 사용",
+    )
+    # 2026-04-21 신규: 오디오 존재 여부를 STT fallback 판정에 반영
+    hasAudio: bool | None = Field(
+        default=None,
+        description="영상에 실제 음성이 있는지 여부",
+    )
+    # 2026-04-21 신규: 심한 잡음 여부를 STT fallback 판정에 반영
+    severeNoise: bool | None = Field(
+        default=None,
+        description="잡음이 심한지 여부",
+    )
+    # 2026-04-21 신규: Vision 보조 평가에 사용할 최소 메타데이터
+    faceDetectedRatio: float | None = Field(
+        default=None,
+        description="얼굴 유지율 0.0~1.0",
+    )
+    multiFaceDetected: bool | None = Field(
+        default=None,
+        description="다중 얼굴 검출 여부",
+    )
+    lowLight: bool | None = Field(
+        default=None,
+        description="저조도 여부",
+    )
+    obstructionDetected: bool | None = Field(
+        default=None,
+        description="가림 여부",
+    )
+    gazeStable: bool | None = Field(
+        default=None,
+        description="간단한 정면 응시 proxy 안정 여부",
+    )
 
 
 class TempArtifacts(BaseModel):
@@ -129,8 +171,38 @@ class InterviewAnswerResponse(BaseModel):
     answerFullText: str = Field(description="사용자에게 다시 보여줄 답변 텍스트")
     feedbackText: str = Field(description="현재 답변에 대한 피드백")
     nonverbalSummaryText: str = Field(description="비언어 보조 평가 요약")
+    visionResultStatus: VisionResultStatus = Field(description="Vision 보조 평가 상태값")
+    # 2026.04.25 신규: 13단계 최종 리포트 계산에 사용할 내용 점수를 내부 응답에 포함
+    contentScore: int = Field(description="내용 평가 점수(85점 만점)")
+    # 2026.04.25 신규: 13단계 최종 리포트 계산에 사용할 비언어 점수를 내부 응답에 포함
+    nonverbalScore: int = Field(description="비언어 보조 평가 점수(15점 만점)")
+    # 2026.04.25 신규: 13단계 최종 리포트 계산에 사용할 총점을 내부 응답에 포함
+    totalScore: int = Field(description="턴 총점(100점 만점)")
     decision: DecisionResponse = Field(description="다음 진행 결정")
     tempArtifacts: TempArtifacts = Field(description="임시 저장 산출물 참조값")
+
+
+class FinalQuestionAnswerItem(BaseModel):
+    """
+    2026.04.25 이종헌: 신규
+    최종 리포트에서 질문-답변 복기 목록으로 사용하는 항목.
+    """
+
+    turnNumber: int = Field(description="턴 번호")
+    questionText: str = Field(description="질문 문장")
+    answerFullText: str = Field(description="사용자에게 다시 보여줄 답변 텍스트")
+
+
+class FinalTurnFeedbackItem(BaseModel):
+    """
+    2026.04.25 이종헌: 신규
+    최종 리포트에서 턴별 피드백 목록으로 사용하는 항목.
+    """
+
+    turnNumber: int = Field(description="턴 번호")
+    questionText: str = Field(description="질문 문장")
+    feedbackText: str = Field(description="턴 피드백")
+    nonverbalSummaryText: str = Field(description="비언어 요약")
 
 
 class FinalReport(BaseModel):
@@ -153,6 +225,16 @@ class FinalReport(BaseModel):
     practiceDirections: list[str] = Field(
         default_factory=list,
         description="연습 방향 3개 정도",
+    )
+    # 2026.04.25 신규: 자료 기준 질문 목록-답변 구성을 최종 리포트에 포함
+    questionAnswers: list[FinalQuestionAnswerItem] = Field(
+        default_factory=list,
+        description="질문 목록-답변",
+    )
+    # 2026.04.25 신규: 자료 기준 턴별 피드백 구성을 최종 리포트에 포함
+    turnFeedbacks: list[FinalTurnFeedbackItem] = Field(
+        default_factory=list,
+        description="턴별 피드백",
     )
 
 

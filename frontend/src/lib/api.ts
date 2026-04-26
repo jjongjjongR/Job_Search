@@ -34,12 +34,14 @@ export async function apiRequest<T>(
   options?: RequestInit,
 ): Promise<T> {
   const token = getAccessToken();
+  const isFormData =
+    typeof FormData !== 'undefined' && options?.body instanceof FormData;
 
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...options,
     headers: {
-      'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(!isFormData ? { 'Content-Type': 'application/json' } : {}),
       ...(options?.headers ?? {}),
     },
     cache: 'no-store',
@@ -55,5 +57,14 @@ export async function apiRequest<T>(
     throw new ApiError(message, response.status);
   }
 
-  return (await response.json()) as T;
+  if (response.status === 204) {
+    return undefined as T;
+  }
+
+  const rawText = await response.text();
+  if (!rawText.trim()) {
+    return undefined as T;
+  }
+
+  return JSON.parse(rawText) as T;
 }
