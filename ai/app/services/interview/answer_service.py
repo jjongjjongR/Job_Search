@@ -153,6 +153,14 @@ async def interview_answer_service(
     if decision.type == "NEXT_QUESTION":
         current_plan_index += 1
 
+    # 2026-04-29 신규: 세션 종료 cleanup에서 임시 업로드 답변 영상을 삭제할 수 있도록 storage key를 상태에 누적
+    temp_video_storage_keys = list(session_state.get("tempVideoStorageKeys", []))
+    if (
+        payload.answerVideoStorageKey
+        and payload.answerVideoStorageKey not in temp_video_storage_keys
+    ):
+        temp_video_storage_keys.append(payload.answerVideoStorageKey)
+
     await redis_interview_state_store.save_session_state(
         session_id=payload.sessionId,
         payload={
@@ -172,6 +180,8 @@ async def interview_answer_service(
             "jdText": jd_text,
             "documents": session_state.get("documents", {}),
             "lastEvaluation": evaluation,
+            # 2026-04-29 신규: private temp storage의 답변 영상 삭제 대상을 Redis state에 유지
+            "tempVideoStorageKeys": temp_video_storage_keys,
         },
     )
 

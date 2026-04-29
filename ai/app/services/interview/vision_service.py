@@ -1,5 +1,11 @@
+# ai/app/services/interview/vision_service.py
+
+from pathlib import Path
+
+from app.core.config import settings
 from app.schemas.common import VisionResultStatus
 from app.schemas.interview import InterviewAnswerRequest
+from app.services.vision.mediapipe_backend import MediaPipeVisionBackend
 
 
 # 2026-04-21 신규: 12단계 규칙에 맞춘 최소 Vision 보조 평가
@@ -18,11 +24,44 @@ def evaluate_vision_metrics(payload: InterviewAnswerRequest) -> dict[str, object
             },
         }
 
-    face_ratio = payload.faceDetectedRatio if payload.faceDetectedRatio is not None else 0.8
-    multi_face = bool(payload.multiFaceDetected)
-    low_light = bool(payload.lowLight)
-    obstruction = bool(payload.obstructionDetected)
-    gaze_stable = True if payload.gazeStable is None else bool(payload.gazeStable)
+    # 2026-04-29 신규: 영상 storage key가 있으면 MediaPipe backend로 실제 Vision 지표를 계산
+    if payload.answerVideoStorageKey:
+        cleaned_key = payload.answerVideoStorageKey.strip().lstrip("/").replace("\\", "/")
+        if cleaned_key and ".." not in cleaned_key.split("/"):
+            video_path = (Path(settings.BACKEND_STORAGE_ROOT) / cleaned_key).resolve()
+            metrics = MediaPipeVisionBackend().analyze_video(str(video_path))
+            # 2026-04-29 신규: 영상 파일 접근 실패 등 backend가 건너뛴 경우 면접 흐름은 계속 진행
+            if metrics.status == VisionResultStatus.SKIPPED:
+                return {
+                    "status": VisionResultStatus.SKIPPED,
+                    "score": 0,
+                    "summary": "영상 분석을 완료하지 못해 내용 평가만 반영했습니다.",
+                    "metrics": {
+                        "faceDetectedRatio": metrics.face_detected_ratio,
+                        "multiFaceDetected": metrics.multi_face_detected,
+                        "lowLight": metrics.low_light,
+                        "obstructionDetected": metrics.obstruction_detected,
+                        "gazeStable": metrics.gaze_stable,
+                    },
+                }
+            face_ratio = metrics.face_detected_ratio
+            multi_face = metrics.multi_face_detected
+            low_light = metrics.low_light
+            obstruction = metrics.obstruction_detected
+            gaze_stable = metrics.gaze_stable
+        else:
+            face_ratio = 0.0
+            multi_face = False
+            low_light = False
+            obstruction = False
+            gaze_stable = False
+    else:
+        # 2026-04-29 수정: 실제 영상이 없을 때만 요청 메타데이터 기반 fallback을 유지
+        face_ratio = payload.faceDetectedRatio if payload.faceDetectedRatio is not None else 0.8
+        multi_face = bool(payload.multiFaceDetected)
+        low_light = bool(payload.lowLight)
+        obstruction = bool(payload.obstructionDetected)
+        gaze_stable = True if payload.gazeStable is None else bool(payload.gazeStable)
 
     if multi_face:
         return {

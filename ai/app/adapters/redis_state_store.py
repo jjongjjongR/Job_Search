@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Any
 
 from app.core.config import settings
@@ -98,11 +99,18 @@ class RedisInterviewStateStore:
                 "cleanupDeadline": deadline.isoformat(),
                 "deleteAfterSeconds": ttl_seconds,
             },
-            ttl_seconds=ttl_seconds,
+            # 2026-04-29 수정: cleanup key가 삭제 시점 전에 만료되지 않도록 여유 TTL을 둔다
+            ttl_seconds=ttl_seconds + self.default_ttl_seconds,
         )
 
     async def delete_session_artifacts(self, session_id: str) -> None:
         client = await self._client()
+        session_state = await self._get_json_with_client(
+            client,
+            self._session_state_key(session_id),
+        )
+        # 2026-04-29 신규: 기준사항에 맞춰 private temp storage의 임시 답변 영상 파일도 함께 삭제
+        self._delete_temp_video_files(session_state)
         keys = [
             self._session_state_key(session_id),
             self._cleanup_key(session_id),
@@ -174,6 +182,12 @@ class RedisInterviewStateStore:
             return None
         return json.loads(value)
 
+    async def _get_json_with_client(self, client, key: str) -> dict[str, Any] | None:
+        value = await client.get(key)
+        if not value:
+            return None
+        return json.loads(value)
+
     async def _delete(self, key: str) -> None:
         client = await self._client()
         await client.delete(key)
@@ -197,6 +211,26 @@ class RedisInterviewStateStore:
         for pattern in patterns:
             keys.extend(await client.keys(pattern))
         return keys
+
+    def _delete_temp_video_files(self, session_state: dict[str, Any] | None) -> None:
+        if not session_state:
+            return
+
+        storage_root = Path(settings.BACKEND_STORAGE_ROOT).resolve()
+        for storage_key in session_state.get("tempVideoStorageKeys", []):
+            cleaned_key = str(storage_key).strip().lstrip("/").replace("\\", "/")
+            if (
+                not cleaned_key
+                or ".." in cleaned_key.split("/")
+                or not cleaned_key.startswith("temp/interview_answer_upload/")
+            ):
+                continue
+
+            file_path = (storage_root / cleaned_key).resolve()
+            if storage_root not in file_path.parents:
+                continue
+
+            file_path.unlink(missing_ok=True)
 
     def _session_state_key(self, session_id: str) -> str:
         return f"interview:session:{session_id}:state"

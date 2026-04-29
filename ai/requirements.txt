@@ -7,3 +7,7 @@ redis==6.4.0
 pytest==9.0.2
 httpx==0.28.1
 langgraph>=0.2.0
+# 2026-04-29 신규: MediaPipe 기반 Vision 분석을 위해 얼굴/랜드마크 추론 패키지를 추가
+mediapipe==0.10.33
+# 2026-04-29 신규: 영상 프레임 샘플링과 밝기 계산을 위해 OpenCV 패키지를 추가
+opencv-python>=4.10,<5
