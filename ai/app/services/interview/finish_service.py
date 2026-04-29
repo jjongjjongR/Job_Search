@@ -20,9 +20,15 @@ async def interview_finish_service(
     hidden_scores = await redis_interview_state_store.list_hidden_scores(payload.sessionId)
     finished_at = datetime.now(timezone.utc).isoformat()
     final_report = _build_final_report(session_state, hidden_scores)
+    # 2026-04-29 신규: 5문항 미만 종료는 기준사항에 따라 리포트 없이 취소 상태로 마감
+    status = (
+        InterviewSessionStatus.FINISHED
+        if len(hidden_scores) >= 5
+        else InterviewSessionStatus.CANCELLED
+    )
 
     response = InterviewFinishResponse(
-        status=InterviewSessionStatus.FINISHED,
+        status=status,
         finishedAt=finished_at,
         finalReport=final_report,
     )
@@ -49,6 +55,8 @@ async def interview_finish_service(
             "positionName": session_state.get("positionName"),
             "jdText": session_state.get("jdText"),
             "documents": session_state.get("documents", {}),
+            # 2026-04-29 신규: cleanup 시 임시 업로드 답변 영상 삭제 대상을 유지
+            "tempVideoStorageKeys": session_state.get("tempVideoStorageKeys", []),
             "finalReport": final_report.model_dump(),
         },
     )
@@ -61,25 +69,26 @@ def _build_final_report(
     session_state: dict[str, object],
     hidden_scores: list[dict[str, object]],
 ) -> FinalReport:
-    if not hidden_scores:
+    # 2026-04-29 수정: 5문항 미만은 기준사항에 따라 평가 리포트를 생성하지 않는다
+    if len(hidden_scores) < 5:
         return FinalReport(
             totalScore=0,
-            grade="집중 보완 필요",
-            summary="아직 저장된 답변 평가가 없어 최종 리포트를 생성하지 못했습니다.",
+            grade="리포트 미생성",
+            summary="실제 진행 문항 수가 5문항 미만이라 기준사항에 따라 최종 평가는 생성하지 않았습니다.",
             strengths=[
-                "면접 세션 시작은 정상적으로 완료되었습니다.",
-                "이후 답변이 누적되면 실제 평가 요약을 생성할 수 있습니다.",
-                "현재 단계에서는 종료 흐름과 저장 구조를 먼저 마감했습니다.",
+                "최종 리포트 생성 기준 문항 수에 도달하지 않았습니다.",
+                "부분 답변은 평가 결과로 확정하지 않았습니다.",
+                "임시 분석 데이터는 cleanup 정책에 따라 삭제됩니다.",
             ],
             weaknesses=[
-                "저장된 답변 턴이 없습니다.",
-                "내용 점수 집계가 아직 불가능합니다.",
-                "비언어 보조 평가 집계도 아직 없습니다.",
+                "5문항 이상 진행해야 최종 점수를 계산할 수 있습니다.",
+                "질문-답변 누적량이 부족해 강점과 보완점을 확정할 수 없습니다.",
+                "면접 흐름을 다시 시작해 충분한 답변 수를 확보해야 합니다.",
             ],
             practiceDirections=[
-                "최소 1개 이상 답변을 제출한 뒤 다시 종료해 보세요.",
-                "질문 의도에 맞는 답변을 먼저 충분히 남겨 보세요.",
-                "필요하면 텍스트 답변으로라도 세션을 이어가 보세요.",
+                "다음 세션에서는 최소 5문항 이상 답변한 뒤 종료해 보세요.",
+                "답변이 막히면 텍스트 fallback을 사용해 흐름을 이어가 보세요.",
+                "1분 자기소개부터 직무 연결 문장을 짧게 준비해 보세요.",
             ],
             questionAnswers=[],
             turnFeedbacks=[],

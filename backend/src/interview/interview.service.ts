@@ -357,6 +357,30 @@ export class InterviewService {
     session.status = response.status;
     session.finishedAt = response.finishedAt;
     this.sessions.set(sessionId, session);
+
+    // 2026-04-29 신규: 5문항 미만 종료는 기준사항에 따라 평가 리포트 없이 부분 턴 기록을 삭제
+    if (response.status === InterviewSessionStatus.CANCELLED) {
+      this.sessionTurns.delete(sessionId);
+      await this.interviewTurnRepository.delete({ sessionId });
+      await this.interviewSessionRepository.update(
+        { id: sessionId },
+        {
+          status: InterviewSessionStatus.CANCELLED,
+          finalTotalScore: null,
+          finalGrade: null,
+          finalSummary: null,
+          finishedAt: new Date(response.finishedAt),
+        },
+      );
+
+      return {
+        sessionId,
+        status: response.status,
+        finishedAt: response.finishedAt,
+        finalReport: response.finalReport,
+      };
+    }
+
     await this.interviewSessionRepository.update(
       { id: sessionId },
       {
