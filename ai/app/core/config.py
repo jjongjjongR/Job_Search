@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str | None = None
     OPENAI_JOB_ANALYSIS_MODEL: str = "gpt-4o-mini"
     OPENAI_STT_MODEL: str = "gpt-4o-mini-transcribe"
-    COVER_LETTER_RAG_DB_PATH: str = "data/cover_letter_rag.sqlite3"
+    COVER_LETTER_RAG_DB_PATH: str = "data/chroma_rag"
     BACKEND_STORAGE_ROOT: str = "../backend/storage"
 
     model_config = SettingsConfigDict(

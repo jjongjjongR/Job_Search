@@ -2,9 +2,11 @@
 
 ## 1. 자소서 AI 한 줄 설명
 
-자소서 AI는 공고 JD와 사용자의 자기소개서, 이력서, 포트폴리오를 함께 분석해서 JD 적합도, 직무 적합도, 문항별 점수, 강점, 보완점, 다음 액션, 수정 초안을 생성하는 기능이다.
+자소서 AI는 공고 JD와 사용자의 자기소개서, 이력서, 포트폴리오를 함께 분석해서 JD 적합도, 직무 적합도, 문항별 점수, 강점, 보완점, 다음 액션, 수정 방향 예시를 제공하는 피드백 기능이다.
 
-단순히 AI가 점수를 찍는 구조가 아니라, `LangGraph Agent 흐름`, `벡터 DB 기반 RAG`, `항목별 rubric 점수`, `서버 근거 검증`, `초안 재검토`를 거쳐 결과를 만든다.
+단순히 AI가 점수를 찍는 구조가 아니라, `LangGraph Agent 흐름`, `벡터 DB 기반 RAG`, `항목별 rubric 점수`, `서버 근거 검증`, `수정 방향 예시 재검토`를 거쳐 결과를 만든다.
+
+자료/요구사항 기준상 자소서 AI는 독립적인 자기소개서 생성 기능이 아니다. Draft 계열 Agent는 최종 제출본을 생성하는 기능이 아니라, 사용자가 피드백을 이해하도록 돕는 학습용 예시를 만드는 내부 보조 노드다.
 
 ## 2. 왜 이런 구조로 만들었는가
 
@@ -36,8 +38,8 @@ LangGraph가 agent 실행 순서를 고정한다.
 8. Evidence Extractor Agent가 사용자 문서와 문항을 정리한다.
 9. Evaluator Agent가 rubric 기준으로 평가한다.
 10. 서버가 점수 근거를 다시 검증한다.
-11. Draft Generator Agent가 수정 초안을 만든다.
-12. Draft Reviewer Agent가 초안을 다시 검사한다.
+11. Draft Generator Agent가 수정 방향 예시를 만든다.
+12. Draft Reviewer Agent가 수정 방향 예시를 다시 검사한다.
 13. 결과가 NestJS로 돌아온다.
 14. NestJS가 cover_letter_reports에 저장한다.
 15. 프론트와 마이페이지에서 결과를 확인한다.
@@ -195,12 +197,12 @@ ai/app/services/cover_letter/draft_generator_agent.py
 
 역할:
 
-- 평가 결과와 RAG 근거를 바탕으로 자소서 수정 초안을 만든다.
+- 평가 결과와 RAG 근거를 바탕으로 자소서 수정 방향 예시를 만든다.
 - 원본 문항 수를 유지한다.
 - 각 문항마다 소제목을 만든다.
 - 마크다운 문법이나 괄호를 제거한다.
 
-초안 생성 기준:
+수정 방향 예시 작성 기준:
 
 - 입력 문서에 없는 새 경험을 만들지 않는다.
 - RAG 근거에 있는 경험을 중심으로 작성한다.
@@ -210,7 +212,7 @@ ai/app/services/cover_letter/draft_generator_agent.py
 왜 필요한가:
 
 - 피드백만 있으면 사용자가 어떻게 고쳐야 할지 막힐 수 있다.
-- 수정 초안은 최종 제출본이 아니라, 사용자가 개선 방향을 이해하기 위한 학습용 결과물이다.
+- 수정 방향 예시는 최종 제출본이 아니라, 사용자가 개선 방향을 이해하기 위한 학습용 결과물이다.
 
 ### 4-6. Draft Reviewer Agent
 
@@ -222,7 +224,7 @@ ai/app/services/cover_letter/draft_reviewer_agent.py
 
 역할:
 
-- 생성된 초안을 다시 검사한다.
+- 생성된 수정 방향 예시를 다시 검사한다.
 - 문항 수, 형식, JD 연결, 과장 여부를 확인한다.
 
 검토 기준:
@@ -236,8 +238,8 @@ ai/app/services/cover_letter/draft_reviewer_agent.py
 
 왜 필요한가:
 
-- 생성 AI는 그럴듯한 초안을 만들 수 있지만, 없는 내용을 섞을 위험이 있다.
-- 그래서 초안도 한 번 더 검토한다.
+- 생성 AI는 그럴듯한 수정 방향 예시를 만들 수 있지만, 없는 내용을 섞을 위험이 있다.
+- 그래서 수정 방향 예시도 한 번 더 검토한다.
 
 ## 5. LangGraph는 어디에 쓰이는가
 
@@ -265,8 +267,8 @@ jd_analyzer
 
 - agent 순서가 섞이지 않게 한다.
 - 평가 전에 반드시 RAG 검색을 하게 만든다.
-- 초안을 만들기 전에 반드시 평가 결과를 거치게 만든다.
-- 초안을 보여주기 전에 반드시 reviewer를 거치게 만든다.
+- 수정 방향 예시를 만들기 전에 반드시 평가 결과를 거치게 만든다.
+- 수정 방향 예시를 보여주기 전에 반드시 reviewer를 거치게 만든다.
 
 현재 실제 `langgraph` 패키지를 설치했고, 스모크 테스트에서 `graphRuntime LANGGRAPH`를 확인했다.
 
@@ -278,28 +280,28 @@ jd_analyzer
 ai/app/services/cover_letter/vector_rag_store.py
 ```
 
-현재 구현은 SQLite 기반 경량 벡터 저장소다.
+현재 구현은 ChromaDB 기반 로컬 벡터 저장소다.
 
 동작:
 
 ```text
 1. JD, 자소서, 이력서, 포트폴리오를 chunk로 나눈다.
 2. 각 chunk를 벡터로 변환한다.
-3. SQLite DB에 chunk와 vector를 저장한다.
-4. JD 키워드와 평가 항목 query로 검색한다.
-5. cosine similarity가 높은 chunk를 평가 근거로 사용한다.
+3. ChromaDB collection에 chunk, vector, metadata를 저장한다.
+4. JD 키워드와 평가 항목 query로 collection을 검색한다.
+5. cosine distance 기준으로 가까운 chunk를 평가 근거로 사용한다.
 ```
 
-왜 SQLite인가:
+왜 ChromaDB인가:
 
-- 로컬 개발 단계에서 별도 벡터 DB 서버 없이 바로 테스트할 수 있다.
-- 메모리 사용량이 작다.
-- 나중에 pgvector, Chroma, FAISS로 바꿀 수 있도록 코드가 분리되어 있다.
+- 로컬 개발 단계에서 별도 서버 없이 PersistentClient로 바로 테스트할 수 있다.
+- collection 단위로 자소서/면접 RAG 근거를 분리하기 쉽다.
+- 나중에 Chroma 서버, pgvector, 관리형 vector DB로 바꿔도 agent 인터페이스를 유지할 수 있다.
 
 운영에서 권장:
 
-- 로컬 개발: SQLite vector store
-- 운영 배포: PostgreSQL pgvector 또는 Chroma
+- 로컬 개발: ChromaDB PersistentClient
+- 운영 배포: Chroma 서버, PostgreSQL pgvector 또는 관리형 vector DB
 
 ## 7. 점수는 어떻게 만들어지는가
 
@@ -371,7 +373,7 @@ ai/app/services/cover_letter/vector_rag_store.py
 - 강점
 - 보완점
 - 다음 액션
-- 자소서 수정 초안
+- 자소서 수정 방향 예시
 
 ## 10. 예상 질문과 답변
 
@@ -389,15 +391,15 @@ ai/app/services/cover_letter/vector_rag_store.py
 
 질문: LangGraph는 왜 필요한가?
 
-답변: agent 실행 순서를 고정하기 위해 필요하다. JD 분석 없이 평가하거나, 근거 검색 없이 초안을 만드는 흐름을 막는다.
+답변: agent 실행 순서를 고정하기 위해 필요하다. JD 분석 없이 평가하거나, 근거 검색 없이 수정 방향 예시를 만드는 흐름을 막는다.
 
-질문: 수정 초안이 없는 경험을 만들어내면?
+질문: 수정 방향 예시이 없는 경험을 만들어내면?
 
 답변: Draft Generator Agent는 RAG 근거에 없는 새 경험을 만들지 말라는 기준으로 생성한다. 이후 Draft Reviewer Agent가 문항 수, 형식, 과장 여부를 다시 검사한다.
 
-질문: SQLite vector store는 실제 벡터 DB인가?
+질문: ChromaDB는 실제 벡터 DB인가?
 
-답변: 로컬 개발용 경량 벡터 저장소다. chunk와 vector를 DB에 저장하고 cosine similarity로 검색한다. 운영 단계에서는 같은 구조를 pgvector나 Chroma로 교체할 수 있다.
+답변: 그렇다. 현재는 ChromaDB PersistentClient를 사용해 로컬 디스크에 collection, chunk, vector, metadata를 저장하고 cosine 기준으로 검색한다. 운영 단계에서는 같은 구조를 Chroma 서버나 pgvector로 확장할 수 있다.
 
 질문: confidence가 낮으면 무슨 뜻인가?
 
@@ -423,7 +425,7 @@ ai/app/services/cover_letter/vector_rag_store.py
 
 추후 고도화 방향:
 
-- SQLite vector store를 pgvector로 교체
+- ChromaDB PersistentClient를 Chroma 서버 또는 pgvector로 확장
 - OpenAI embedding 또는 한국어 embedding 모델 적용
 - confidence가 낮으면 LangGraph conditional edge로 추가 자료 요청
 - RAG chunk 암호화 저장

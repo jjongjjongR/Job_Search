@@ -28,3 +28,12 @@ project_v7.txt
 
 # 2026-03-18 신규: 로그 파일은 로컬 산출물이므로 제외
 *.log
+
+# 2026-05-08 신규: 로컬 테스트/AI 실행 산출물은 비용 없는 개발 캐시이므로 제외
+__pycache__/
+*.pyc
+.pytest_cache/
+ai/data/chroma_rag/
+backend/storage/temp/
+frontend/.next/
+frontend/tsconfig.tsbuildinfo

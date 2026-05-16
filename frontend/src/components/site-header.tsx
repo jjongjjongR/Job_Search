@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import {
   AUTH_STATE_CHANGED_EVENT,
@@ -11,6 +12,7 @@ import {
 
 export function SiteHeader() {
   const [user, setUser] = useState<AuthUser | null>(null);
+  const pathname = usePathname();
 
   useEffect(() => {
     const syncUser = () => setUser(getStoredUser());
@@ -31,6 +33,11 @@ export function SiteHeader() {
     setUser(null);
     window.location.href = '/login';
   };
+
+  // 2026-05-05 신규: AI 면접은 집중형 전용 화면으로 보여주기 위해 공통 헤더를 숨김
+  if (pathname === '/ai_interview') {
+    return null;
+  }
 
   return (
     <header className="relative mb-4 overflow-hidden rounded-[36px] border border-[var(--border-soft)] bg-[var(--page-panel)] px-6 py-5 shadow-[0_20px_60px_rgba(16,36,61,0.08)] backdrop-blur">

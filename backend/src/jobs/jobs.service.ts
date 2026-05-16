@@ -97,6 +97,34 @@ export class JobsService {
     };
   }
 
+  // 2026-05-05 신규: 면접 시작 화면에서 사용자의 최신 JD 분석 결과를 자동으로 불러오기 위해 추가
+  async getLatestAnalysisByUser(
+    userId: string,
+  ): Promise<JobAnalysisDetailResponseDto | null> {
+    const jobAnalysis = await this.jobAnalysisRepository.findOne({
+      where: { userId },
+      order: { createdAt: 'DESC' },
+    });
+
+    if (!jobAnalysis) {
+      return null;
+    }
+
+    return {
+      jobAnalysisRequestId: jobAnalysis.id,
+      companyName: jobAnalysis.companyName,
+      positionName: jobAnalysis.jobTitle,
+      jdText: jobAnalysis.jdText,
+      extractedSkills: jobAnalysis.skillsJson,
+      extractedKeywords: jobAnalysis.keywordsJson,
+      keywords: jobAnalysis.keywordsJson,
+      sourceUrl: jobAnalysis.sourceUrl,
+      sourceType: jobAnalysis.sourceType,
+      status: jobAnalysis.status,
+      createdAt: jobAnalysis.createdAt.toISOString(),
+    };
+  }
+
   // 2026-04-10 신규: 저장된 공고 분석 결과를 공개 API로 재조회
   async getAnalysisById(
     userId: string,

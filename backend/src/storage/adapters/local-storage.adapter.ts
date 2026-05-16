@@ -34,12 +34,19 @@ export class LocalStorageAdapter implements StoragePort {
   }
 
   async delete(storageKey: string): Promise<void> {
-    const absolutePath = path.join(this.storageRoot, storageKey);
+    const absolutePath = this.resolveSafePath(storageKey);
+    if (!absolutePath) {
+      return;
+    }
+
     await fs.unlink(absolutePath).catch(() => undefined);
   }
 
   async resolve(storageKey: string): Promise<StoredFile | null> {
-    const absolutePath = path.join(this.storageRoot, storageKey);
+    const absolutePath = this.resolveSafePath(storageKey);
+    if (!absolutePath) {
+      return null;
+    }
 
     try {
       const stats = await fs.stat(absolutePath);
@@ -66,7 +73,23 @@ export class LocalStorageAdapter implements StoragePort {
       case 'raw_vision_metrics':
         return purpose;
       default:
-        return 'dataroom_item';
+      return 'dataroom_item';
     }
+  }
+
+  private resolveSafePath(storageKey: string): string | null {
+    const normalizedKey = storageKey.trim().replace(/\\/g, '/').replace(/^\/+/, '');
+    if (!normalizedKey || normalizedKey.split('/').includes('..')) {
+      return null;
+    }
+
+    const storageRoot = path.resolve(this.storageRoot);
+    const absolutePath = path.resolve(storageRoot, normalizedKey);
+    const relativePath = path.relative(storageRoot, absolutePath);
+    if (relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
+      return null;
+    }
+
+    return absolutePath;
   }
 }

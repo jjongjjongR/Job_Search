@@ -17,6 +17,7 @@ from app.services.interview.answer_evaluator import (
     evaluate_interview_answer,
 )
 from app.services.interview.next_question_resolver import resolve_next_interview_step
+from app.services.interview.rag_service import retrieve_interview_evidence
 from app.services.interview.stt_service import evaluate_stt_fallback
 from app.services.interview.vision_service import evaluate_vision_metrics
 
@@ -77,18 +78,30 @@ async def interview_answer_service(
     if not answer_full_text:
         answer_full_text = "지원 직무와 연결되는 경험을 바탕으로 답변을 정리했습니다."
 
+    # 2026-05-07 신규: 직전 질문/답변/JD 기반 RAG 근거를 검색해 답변 평가 신뢰도를 보강
+    retrieved_evidence = retrieve_interview_evidence(
+        collection_id=str(session_state.get("interviewRagCollectionId") or ""),
+        query="\n".join([current_question_text, answer_full_text, jd_text]),
+        limit=5,
+    )
     evaluation = evaluate_interview_answer(
         question_type=current_question_type,
         question_text=current_question_text,
         answer_text=answer_full_text,
         jd_text=jd_text,
         position_name=position_name,
+        retrieved_evidence=retrieved_evidence,
     )
     vision_result = evaluate_vision_metrics(payload)
     nonverbal_summary_text = str(vision_result["summary"])
     nonverbal_score = int(vision_result["score"])
     hidden_total_score = int(evaluation["scores"]["totalContentScore"]) + nonverbal_score
-    decision = resolve_next_interview_step(session_state, evaluation)
+    decision = resolve_next_interview_step(
+        session_state=session_state,
+        evaluation=evaluation,
+        answer_text=answer_full_text,
+    )
+    feedback_text = _build_feedback_text(evaluation)
 
     await redis_interview_state_store.save_raw_transcript(
         session_id=payload.sessionId,
@@ -117,6 +130,14 @@ async def interview_answer_service(
             "breakdown": evaluation["scores"],
             "isSufficient": evaluation["isSufficient"],
             "insufficiencyReasons": evaluation["insufficiencyReasons"],
+            # 2026-05-06 신규: LLM 리포트 생성 agent가 질문/답변 흐름을 근거로 사용할 수 있게 저장
+            "turnNumber": payload.turnNumber,
+            "questionText": current_question_text,
+            "answerFullText": answer_full_text,
+            "feedbackText": feedback_text,
+            "nonverbalSummaryText": nonverbal_summary_text,
+            # 2026-05-07 신규: 최종 리포트와 발표 방어용으로 턴별 RAG 평가 근거를 저장
+            "retrievedEvidence": retrieved_evidence,
         },
     )
     await redis_interview_state_store.save_stt_retry_count(
@@ -127,7 +148,7 @@ async def interview_answer_service(
 
     response = InterviewAnswerResponse(
         answerFullText=answer_full_text,
-        feedbackText=_build_feedback_text(evaluation),
+        feedbackText=feedback_text,
         nonverbalSummaryText=nonverbal_summary_text,
         visionResultStatus=vision_result["status"],
         # 2026.04.25 신규: 13단계 최종 리포트 계산을 위해 턴별 점수를 내부 응답에 포함
@@ -179,6 +200,7 @@ async def interview_answer_service(
             "positionName": position_name,
             "jdText": jd_text,
             "documents": session_state.get("documents", {}),
+            "interviewRagCollectionId": session_state.get("interviewRagCollectionId"),
             "lastEvaluation": evaluation,
             # 2026-04-29 신규: private temp storage의 답변 영상 삭제 대상을 Redis state에 유지
             "tempVideoStorageKeys": temp_video_storage_keys,

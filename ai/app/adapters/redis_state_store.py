@@ -111,6 +111,8 @@ class RedisInterviewStateStore:
         )
         # 2026-04-29 신규: 기준사항에 맞춰 private temp storage의 임시 답변 영상 파일도 함께 삭제
         self._delete_temp_video_files(session_state)
+        # 2026-05-07 신규: 면접 평가용 RAG chunk collection도 세션 cleanup 때 함께 삭제
+        self._delete_interview_rag_collection(session_state)
         keys = [
             self._session_state_key(session_id),
             self._cleanup_key(session_id),
@@ -231,6 +233,18 @@ class RedisInterviewStateStore:
                 continue
 
             file_path.unlink(missing_ok=True)
+
+    def _delete_interview_rag_collection(self, session_state: dict[str, Any] | None) -> None:
+        if not session_state:
+            return
+
+        collection_id = str(session_state.get("interviewRagCollectionId") or "").strip()
+        if not collection_id:
+            return
+
+        from app.services.cover_letter.vector_rag_store import cover_letter_vector_rag_store
+
+        cover_letter_vector_rag_store.delete_collection(collection_id)
 
     def _session_state_key(self, session_id: str) -> str:
         return f"interview:session:{session_id}:state"

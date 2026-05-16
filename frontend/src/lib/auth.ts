@@ -43,12 +43,54 @@ export function getStoredUser(): AuthUser | null {
 
   const rawUser = localStorage.getItem(USER_KEY);
 
-  if (!rawUser) {
-    return null;
-  }
-
   try {
-    return JSON.parse(rawUser) as AuthUser;
+    if (rawUser) {
+      return JSON.parse(rawUser) as AuthUser;
+    }
+
+    const accessToken = localStorage.getItem(ACCESS_TOKEN_KEY);
+    if (!accessToken) {
+      return null;
+    }
+
+    const [, payload] = accessToken.split('.');
+    if (!payload) {
+      return null;
+    }
+
+    // 2026-05-16 신규: JWT base64url payload를 브라우저 atob가 읽을 수 있는 base64 문자열로 변환
+    const normalizedPayload = payload
+      .replace(/-/g, '+')
+      .replace(/_/g, '/')
+      .padEnd(Math.ceil(payload.length / 4) * 4, '=');
+
+    // 2026-05-16 신규: user 캐시가 없을 때 JWT payload에서 보호 페이지 표시용 사용자 정보를 복구
+    const decodedPayload = JSON.parse(atob(normalizedPayload)) as {
+      sub?: string;
+      email?: string;
+      username?: string;
+      displayName?: string;
+      role?: string;
+    };
+
+    // 2026-05-16 신규: 토큰에 필수 사용자 정보가 있을 때만 로그인 사용자로 인정
+    if (
+      !decodedPayload.sub ||
+      !decodedPayload.email ||
+      !decodedPayload.username ||
+      !decodedPayload.displayName ||
+      !decodedPayload.role
+    ) {
+      return null;
+    }
+
+    return {
+      id: decodedPayload.sub,
+      email: decodedPayload.email,
+      username: decodedPayload.username,
+      displayName: decodedPayload.displayName,
+      role: decodedPayload.role,
+    };
   } catch {
     return null;
   }

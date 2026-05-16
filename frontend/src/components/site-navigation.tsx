@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { getStoredUser } from '@/lib/auth';
 
@@ -16,6 +17,7 @@ const links = [
 
 export function SiteNavigation() {
   const [userLabel, setUserLabel] = useState('Guest');
+  const pathname = usePathname();
 
   useEffect(() => {
     const syncUserLabel = () => {
@@ -27,6 +29,11 @@ export function SiteNavigation() {
 
     return () => window.removeEventListener('storage', syncUserLabel);
   }, []);
+
+  // 2026-05-05 신규: AI 면접은 집중형 전용 화면으로 보여주기 위해 공통 네비게이션을 숨김
+  if (pathname === '/ai_interview') {
+    return null;
+  }
 
   return (
     <nav className="mb-8 rounded-[28px] border border-[var(--border-soft)] bg-white/82 p-3 shadow-[0_12px_34px_rgba(16,36,61,0.05)] backdrop-blur">

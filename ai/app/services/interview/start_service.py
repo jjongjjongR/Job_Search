@@ -20,6 +20,7 @@ from app.services.interview.question_planner import (
     build_question_plan,
     normalize_interview_documents,
 )
+from app.services.interview.rag_service import build_interview_rag_collection
 
 
 # 2026-04-15 신규: 문서 충분도 규칙을 고정값으로 계산
@@ -56,6 +57,14 @@ async def interview_start_service(
         documents=payload.documents,
         document_sufficiency=document_sufficiency,
     )
+    # 2026-05-07 신규: 면접 평가가 JD/자소서/이력서/포트폴리오 근거를 검색할 수 있게 RAG collection 생성
+    interview_rag_collection_id = build_interview_rag_collection(
+        session_id=payload.sessionId,
+        company_name=payload.companyName,
+        position_name=payload.positionName,
+        jd_text=payload.jdText,
+        documents=payload.documents,
+    )
     first_question = question_plan[0]
 
     response = InterviewStartResponse(
@@ -89,6 +98,7 @@ async def interview_start_service(
             "positionName": payload.positionName,
             "jdText": payload.jdText,
             "documents": normalize_interview_documents(payload.documents),
+            "interviewRagCollectionId": interview_rag_collection_id,
         },
     )
 

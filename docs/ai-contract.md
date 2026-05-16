@@ -1,9 +1,10 @@
 # AI Contract
 
-## 1. 목적
+## 1. 기준
 
-이 문서는 `Next.js -> NestJS -> FastAPI` 구조에서 AI 파트 구현 시 사용할 API 계약 문서다.
-공개 API는 NestJS가 제공하고, FastAPI는 내부 API만 제공한다.
+이 문서는 `자료/API명세서_v9.xlsx`, `자료/프로젝트_기준사항v9.txt`, `자료/project_v8.txt`, `자료/단계별 진행가이드.txt`, `자료/AI_plan.docx`를 기준으로 정리한다.
+
+우선순위는 항상 `자료` 폴더가 `docs`보다 높다.
 
 ## 2. 공개/내부 호출 원칙
 
@@ -11,34 +12,39 @@
 - NestJS는 JWT 인증과 권한 검사를 처리한다.
 - FastAPI는 외부에 직접 공개하지 않는다.
 - NestJS만 FastAPI 내부 API를 호출한다.
-- FastAPI는 `x-internal-shared-secret` 헤더를 검사한다.
+- FastAPI 내부 API는 `x-internal-shared-secret` 헤더로 보호한다.
+- AI 결과는 구조화 JSON으로 받고 서버 검증 후 저장한다.
+
+## 3. 핵심 저장 원칙
+
 - `answer_full_text`는 raw transcript 원본이 아니다.
 - `answer_full_text`는 사용자에게 다시 보여줄 답변 텍스트다.
-- `answer_full_text`는 STT 결과를 바탕으로 만들되, 사용자가 실제 말한 흐름을 최대한 보존한다.
-- `answer_full_text`는 말버릇, 반복어, 장황함을 제거하지 않는다.
-- `answer_full_text`의 허용 보정은 띄어쓰기, 문장부호, 명백한 STT 깨짐 수정 정도로 제한한다.
-- raw transcript 원본은 비영구 저장 대상이며 세션 종료 후 10분 내 삭제한다.
+- `answer_full_text`는 사용자가 실제 말한 흐름을 최대한 보존한다.
+- 말버릇, 반복어, 장황함은 제거하지 않는다.
+- 허용 보정은 띄어쓰기, 문장부호, 명백한 STT 깨짐 수정 정도로 제한한다.
+- raw transcript, raw vision metrics, hidden score, 세션 중간 상태, 실패 세션 임시 데이터는 세션 종료 후 10분 내 삭제한다.
+- raw video와 raw frame image는 장기 저장하지 않는다.
 
-## 3. 공개 API 목록
+## 4. 공개 API
 
-## 3-1. 공고 분석
+### 4-1. 공고 분석
 
 - Method: `POST`
 - Path: `/jobs/analyze`
+- Auth: required
 
-Request JSON:
+Request:
 
 ```json
 {
-  "jobUrl": "https://example.com/jobs/123",
   "jobPostingUrl": "https://example.com/jobs/123",
   "manualCompanyName": "OpenAI Korea",
-  "manualJobTitle": "Backend Engineer",
-  "manualJdText": ""
+  "manualPositionName": "Backend Engineer",
+  "manualJdText": "백엔드 서비스 개발, PostgreSQL, AWS 경험 우대"
 }
 ```
 
-Response JSON:
+Response:
 
 ```json
 {
@@ -46,549 +52,317 @@ Response JSON:
   "companyName": "OpenAI Korea",
   "positionName": "Backend Engineer",
   "jdText": "백엔드 서비스 개발, PostgreSQL, AWS 경험 우대",
-  "sourceType": "JOB_POSTING_URL"
+  "sourceType": "URL"
 }
 ```
 
-## 3-2. 자소서 피드백 생성
+`sourceType`은 `URL | MANUAL`만 사용한다.
+
+### 4-2. 자소서 피드백 생성
 
 - Method: `POST`
 - Path: `/ai/cover-letter/feedback`
+- Auth: required
 
-Request JSON:
+Request:
 
 ```json
 {
-  "jobAnalysisRequestId": "jar-001",
-  "documents": {
-    "coverLetterText": "안녕하세요. 백엔드 개발자로...",
-    "resumeText": "경력 요약...",
-    "portfolioText": "프로젝트 요약..."
-  },
+  "coverLetterText": "안녕하세요. 백엔드 개발자로...",
   "coverLetterDocumentId": "doc-cover-001",
   "resumeDocumentId": "doc-resume-001",
-  "portfolioDocumentId": "doc-portfolio-001"
+  "portfolioDocumentId": "doc-portfolio-001",
+  "jobAnalysisRequestId": "jar-001",
+  "companyName": "OpenAI Korea",
+  "positionName": "Backend Engineer",
+  "jdText": "백엔드 서비스 개발, PostgreSQL, AWS 경험 우대"
 }
 ```
 
-Response JSON:
+Response:
 
 ```json
 {
   "reportId": "clr-001",
-  "companyName": "OpenAI Korea",
-  "positionName": "Backend Engineer",
   "totalScore": 84,
   "summary": "JD와의 연결은 좋지만 성과 근거가 더 필요합니다.",
-  "strengths": [
-    "직무 키워드 반영이 잘 되어 있습니다.",
-    "지원 동기가 비교적 명확합니다.",
-    "문장 흐름이 안정적입니다."
-  ],
-  "weaknesses": [
-    "본인 역할 설명이 약합니다.",
-    "성과 수치가 부족합니다.",
-    "프로젝트 근거가 추상적입니다."
-  ],
-  "revisionDirections": [
-    "프로젝트별 역할을 분리해서 쓰세요.",
-    "성과를 수치로 적으세요.",
-    "직무와 연결되는 문장을 마지막에 덧붙이세요."
-  ]
+  "strengths": ["직무 키워드 반영이 좋습니다.", "지원 동기가 명확합니다.", "문장 흐름이 안정적입니다."],
+  "weaknesses": ["본인 역할 설명이 약합니다.", "성과 수치가 부족합니다.", "프로젝트 근거가 추상적입니다."],
+  "revisionDirections": ["프로젝트별 역할을 분리하세요.", "성과를 수치로 적으세요.", "직무 연결 문장을 보강하세요."]
 }
 ```
 
-## 3-3. 자소서 리포트 목록 조회
+### 4-3. 자소서 리포트 목록 조회
 
 - Method: `GET`
 - Path: `/ai/cover-letter/reports`
+- Auth: required
 
-Response JSON:
-
-```json
-[
-  {
-    "reportId": "clr-001",
-    "companyName": "OpenAI Korea",
-    "positionName": "Backend Engineer",
-    "totalScore": 84,
-    "createdAt": "2026-03-30T12:00:00Z"
-  }
-]
-```
-
-## 3-4. 자소서 리포트 단건 조회
-
-- Method: `GET`
-- Path: `/ai/cover-letter/reports/:reportId`
-
-Response JSON:
+Response:
 
 ```json
 {
-  "reportId": "clr-001",
-  "companyName": "OpenAI Korea",
-  "positionName": "Backend Engineer",
-  "totalScore": 84,
-  "summary": "JD와의 연결은 좋지만 성과 근거가 더 필요합니다.",
-  "strengths": [
-    "직무 키워드 반영이 잘 되어 있습니다.",
-    "지원 동기가 비교적 명확합니다.",
-    "문장 흐름이 안정적입니다."
-  ],
-  "weaknesses": [
-    "본인 역할 설명이 약합니다.",
-    "성과 수치가 부족합니다.",
-    "프로젝트 근거가 추상적입니다."
-  ],
-  "revisionDirections": [
-    "프로젝트별 역할을 분리해서 쓰세요.",
-    "성과를 수치로 적으세요.",
-    "직무와 연결되는 문장을 마지막에 덧붙이세요."
-  ],
-  "createdAt": "2026-03-30T12:00:00Z"
-}
-```
-
-## 3-5. 면접 세션 시작
-
-- Method: `POST`
-- Path: `/ai/interview/sessions/start`
-
-Request JSON:
-
-```json
-{
-  "jobAnalysisRequestId": "jar-001",
-  "resumeDocumentId": "doc-resume-001",
-  "coverLetterDocumentId": "doc-cover-001",
-  "portfolioDocumentId": "doc-portfolio-001"
-}
-```
-
-Response JSON:
-
-```json
-{
-  "sessionId": "ivs-001",
-  "documentSufficiency": "SUFFICIENT",
-  "status": "IN_PROGRESS",
-  "currentQuestionNumber": 1,
-  "maxQuestionCount": 10,
-  "question": {
-    "questionType": "SELF_INTRO",
-    "questionText": "1분 자기소개 부탁드립니다."
-  }
-}
-```
-
-## 3-6. 면접 답변 제출
-
-- Method: `POST`
-- Path: `/ai/interview/sessions/:sessionId/answers`
-
-영상 답변 Request JSON:
-
-```json
-{
-  "turnNumber": 1,
-  "answerType": "VIDEO",
-  "answerVideoStorageKey": "temp/interview_answer_upload/1714000000000-answer.webm",
-  "videoDurationSeconds": 18.5,
-  "hasAudio": true
-}
-```
-
-텍스트 답변 Request JSON:
-
-```json
-{
-  "turnNumber": 1,
-  "answerType": "TEXT",
-  "answerText": "안녕하세요. 백엔드 직무에 지원한 홍길동입니다."
-}
-```
-
-Response JSON:
-
-```json
-{
-  "sessionId": "ivs-001",
-  "turnNumber": 1,
-  "evaluation": {
-    "answerFullText": "안녕하세요. 백엔드 직무에 지원한 홍길동입니다.",
-    "feedbackText": "지원 동기는 보였지만 프로젝트 근거를 더 말하면 좋습니다.",
-    "nonverbalSummaryText": "얼굴 유지율은 안정적이었고 큰 장해 요소는 없었습니다.",
-    "visionResultStatus": "VALID"
-  },
-  "decision": {
-    "type": "FOLLOW_UP",
-    "message": "답변의 본인 역할 설명이 부족하여 꼬리질문을 진행합니다.",
-    "followUpCountForCurrentQuestion": 1,
-    "nextQuestion": {
-      "questionType": "FOLLOW_UP",
-      "questionText": "해당 프로젝트에서 본인이 맡은 역할을 더 구체적으로 설명해 주세요."
+  "items": [
+    {
+      "reportId": "clr-001",
+      "companyName": "OpenAI Korea",
+      "positionName": "Backend Engineer",
+      "totalScore": 84,
+      "createdAt": "2026-03-30T12:00:00Z"
     }
-  }
-}
-```
-
-## 3-7. 면접 세션 종료
-
-- Method: `POST`
-- Path: `/ai/interview/sessions/:sessionId/finish`
-
-Request JSON:
-
-```json
-{
-  "reason": "USER_FINISHED"
-}
-```
-
-Response JSON:
-
-```json
-{
-  "sessionId": "ivs-001",
-  "status": "FINISHED",
-  "finalReport": {
-    "totalScore": 81,
-    "summary": "전반적으로 논리 구조는 좋지만 근거 설명은 더 필요합니다.",
-    "strengths": [
-      "직무 연결이 잘 되었습니다.",
-      "답변 흐름이 안정적입니다.",
-      "협업 경험이 잘 드러났습니다."
-    ],
-    "weaknesses": [
-      "성과 근거가 약합니다.",
-      "역할 설명이 일부 추상적입니다.",
-      "답변 길이 편차가 있습니다."
-    ],
-    "practiceDirections": [
-      "성과를 숫자로 정리하세요.",
-      "프로젝트별 역할을 한 문장으로 먼저 말하세요.",
-      "마지막 문장을 직무 연결로 닫으세요."
-    ]
-  }
-}
-```
-
-## 3-8. 면접 세션 목록 조회
-
-- Method: `GET`
-- Path: `/ai/interview/sessions`
-
-Response JSON:
-
-```json
-[
-  {
-    "sessionId": "ivs-001",
-    "companyName": "OpenAI Korea",
-    "positionName": "Backend Engineer",
-    "status": "FINISHED",
-    "totalScore": 81,
-    "createdAt": "2026-03-30T12:00:00Z"
-  }
-]
-```
-
-## 3-9. 면접 세션 단건 조회
-
-- Method: `GET`
-- Path: `/ai/interview/sessions/:sessionId`
-
-Response JSON:
-
-```json
-{
-  "sessionId": "ivs-001",
-  "companyName": "OpenAI Korea",
-  "positionName": "Backend Engineer",
-  "status": "FINISHED",
-  "documentSufficiency": "SUFFICIENT",
-  "totalQuestionCount": 10,
-  "totalScore": 81,
-  "finalSummary": "전반적으로 논리 구조는 좋지만 근거 설명은 더 필요합니다."
-}
-```
-
-## 3-10. 면접 턴 목록 조회
-
-- Method: `GET`
-- Path: `/ai/interview/sessions/:sessionId/turns`
-
-Response JSON:
-
-```json
-[
-  {
-    "turnNumber": 1,
-    "questionType": "SELF_INTRO",
-    "question_text": "1분 자기소개 부탁드립니다.",
-    "answer_full_text": "안녕하세요. 백엔드 직무에 지원한 홍길동입니다.",
-    "feedback_text": "프로젝트 근거를 조금 더 보완하면 좋습니다.",
-    "nonverbal_summary_text": "큰 장해 요소는 없었습니다."
-  }
-]
-```
-
-## 4. 내부 API 목록
-
-## 4-1. 공고 분석
-
-- Method: `POST`
-- Path: `/internal/jobs/analyze`
-
-Request JSON:
-
-```json
-{
-  "userId": "user-001",
-  "jobUrl": "https://example.com/jobs/123",
-  "jobPostingUrl": "https://example.com/jobs/123",
-  "manualJdText": ""
-}
-```
-
-Response JSON:
-
-```json
-{
-  "companyName": "OpenAI Korea",
-  "positionName": "Backend Engineer",
-  "jdText": "백엔드 서비스 개발, PostgreSQL, AWS 경험 우대",
-  "sourceType": "JOB_POSTING_URL"
-}
-```
-
-## 4-2. 자소서 피드백 생성
-
-- Method: `POST`
-- Path: `/internal/cover-letter/feedback`
-
-Request JSON:
-
-```json
-{
-  "userId": "user-001",
-  "jobAnalysis": {
-    "companyName": "OpenAI Korea",
-    "positionName": "Backend Engineer",
-    "jdText": "백엔드 서비스 개발, PostgreSQL, AWS 경험 우대"
-  },
-  "documents": {
-    "coverLetterText": "저는 백엔드 개발자로...",
-    "resumeText": "경력 요약...",
-    "portfolioText": "프로젝트 소개..."
-  }
-}
-```
-
-Response JSON:
-
-```json
-{
-  "totalScore": 84,
-  "summary": "JD와의 연결은 좋지만 성과 근거가 더 필요합니다.",
-  "strengths": [
-    "직무 키워드 반영이 잘 되어 있습니다.",
-    "지원 동기가 비교적 명확합니다.",
-    "문장 흐름이 안정적입니다."
-  ],
-  "weaknesses": [
-    "본인 역할 설명이 약합니다.",
-    "성과 수치가 부족합니다.",
-    "프로젝트 근거가 추상적입니다."
-  ],
-  "revisionDirections": [
-    "프로젝트별 역할을 분리해서 쓰세요.",
-    "성과를 수치로 적으세요.",
-    "직무와 연결되는 문장을 마지막에 덧붙이세요."
   ]
 }
 ```
 
-## 4-3. 면접 세션 시작
+### 4-4. 자소서 리포트 상세 조회
+
+- Method: `GET`
+- Path: `/ai/cover-letter/reports/:reportId`
+- Auth: required
+
+### 4-5. 면접 세션 시작
 
 - Method: `POST`
-- Path: `/internal/interview/start`
+- Path: `/ai/interview/sessions/start`
+- Auth: required
 
-Request JSON:
+Request:
 
 ```json
 {
-  "userId": "user-001",
+  "coverLetterDocumentId": "doc-cover-001",
+  "resumeDocumentId": "doc-resume-001",
+  "portfolioDocumentId": "doc-portfolio-001",
+  "jobAnalysisRequestId": "jar-001",
   "companyName": "OpenAI Korea",
   "positionName": "Backend Engineer",
-  "jdText": "백엔드 서비스 개발, PostgreSQL, AWS 경험 우대",
-  "documents": {
-    "coverLetterText": "저는 백엔드 개발자로...",
-    "resumeText": "경력 요약...",
-    "portfolioText": "프로젝트 소개..."
-  }
+  "jdText": "백엔드 서비스 개발, PostgreSQL, AWS 경험 우대"
 }
 ```
 
-Response JSON:
+Response:
 
 ```json
 {
+  "sessionId": "ivs-001",
   "documentSufficiency": "SUFFICIENT",
-  "question": {
+  "interviewEnabled": true,
+  "coverLetterEnabled": true,
+  "firstQuestion": "1분 자기소개 부탁드립니다.",
+  "status": "IN_PROGRESS"
+}
+```
+
+문서 충분도:
+
+- `SUFFICIENT`: JD 포함 + 사용자 문서 1개 이상
+- `JD_ONLY`: JD만 있음
+- `INSUFFICIENT`: JD도 없고 사용자 문서도 빈약함
+
+`INSUFFICIENT`이면 면접 AI 기능을 비활성화한다.
+
+### 4-6. 면접 답변 제출
+
+- Method: `POST`
+- Path: `/ai/interview/sessions/:sessionId/answers`
+- Auth: required
+
+자료 기준 논리 요청:
+
+```json
+{
+  "videoFile": "multipart mp4|mov",
+  "answerText": "STT 2회 실패 후 텍스트 답변",
+  "answerVideoTitle": "answer-turn-1.mp4"
+}
+```
+
+구현상 사전 업로드를 사용할 경우 `videoFile`은 private temp storage에 저장되고, 내부 처리에는 `answerVideoStorageKey`가 전달될 수 있다. 단, 공개 계약의 영구 저장 대상은 `answerVideoTitle`이며 raw video storage key는 장기 저장 대상이 아니다.
+
+Response:
+
+```json
+{
+  "done": false,
+  "retryable": false,
+  "nextQuestion": "해당 프로젝트에서 본인이 맡은 역할을 더 구체적으로 설명해 주세요.",
+  "ttsUrl": null,
+  "turnSummary": {
+    "turnNo": 1,
     "questionType": "SELF_INTRO",
-    "questionText": "1분 자기소개 부탁드립니다."
+    "questionText": "1분 자기소개 부탁드립니다.",
+    "answerVideoTitle": "answer-turn-1.mp4",
+    "answerFullText": "안녕하세요. 백엔드 직무에 지원한 홍길동입니다.",
+    "feedbackText": "본인 역할과 성과 근거를 더 구체화하면 좋습니다.",
+    "nonverbalSummaryText": "얼굴 유지율은 안정적이었고 큰 장해 요소는 없었습니다.",
+    "inputMode": "VIDEO"
   },
-  "sessionState": {
-    "status": "IN_PROGRESS",
-    "currentQuestionNumber": 1,
-    "followUpCountForCurrentQuestion": 0
-  }
+  "finalResult": null
 }
 ```
 
-## 4-4. 면접 답변 처리
+### 4-7. 면접 세션 종료
 
 - Method: `POST`
-- Path: `/internal/interview/answer`
+- Path: `/ai/interview/sessions/:sessionId/finish`
+- Auth: required
 
-영상 답변 Request JSON:
-
-```json
-{
-  "userId": "user-001",
-  "sessionId": "ivs-001",
-  "turnNumber": 1,
-  "answerType": "VIDEO",
-  "answerVideoStorageKey": "interview/temp/video/ivs-001/turn-1.mp4"
-}
-```
-
-텍스트 답변 Request JSON:
+5문항 이상 진행 시:
 
 ```json
 {
-  "userId": "user-001",
-  "sessionId": "ivs-001",
-  "turnNumber": 1,
-  "answerType": "TEXT",
-  "answerText": "안녕하세요. 백엔드 직무에 지원한 홍길동입니다."
-}
-```
-
-Response JSON:
-
-```json
-{
-  "answer_full_text": "안녕하세요. 백엔드 직무에 지원한 홍길동입니다.",
-  "feedback_text": "지원 동기는 보였지만 프로젝트 근거를 더 말하면 좋습니다.",
-  "nonverbal_summary_text": "얼굴 유지율은 안정적이었고 큰 장해 요소는 없었습니다.",
-  "vision_result_status": "VALID",
-  "decision": {
-    "type": "FOLLOW_UP",
-    "message": "답변의 본인 역할 설명이 부족하여 꼬리질문을 진행합니다.",
-    "followUpCountForCurrentQuestion": 1,
-    "nextQuestion": {
-      "questionType": "FOLLOW_UP",
-      "questionText": "해당 프로젝트에서 본인이 맡은 역할을 더 구체적으로 설명해 주세요."
-    }
-  }
-}
-```
-
-## 4-5. 면접 세션 종료
-
-- Method: `POST`
-- Path: `/internal/interview/finish`
-
-Request JSON:
-
-```json
-{
-  "userId": "user-001",
-  "sessionId": "ivs-001",
-  "reason": "USER_FINISHED"
-}
-```
-
-Response JSON:
-
-```json
-{
-  "status": "FINISHED",
-  "finishedAt": "2026-03-30T12:00:00Z",
-  "finalReport": {
+  "reportGenerated": true,
+  "deleted": false,
+  "deletedReason": null,
+  "finalResult": {
     "totalScore": 81,
+    "grade": "우수",
     "summary": "전반적으로 논리 구조는 좋지만 근거 설명은 더 필요합니다.",
-    "strengths": [
-      "직무 연결이 잘 되었습니다.",
-      "답변 흐름이 안정적입니다.",
-      "협업 경험이 잘 드러났습니다."
-    ],
-    "weaknesses": [
-      "성과 근거가 약합니다.",
-      "역할 설명이 일부 추상적입니다.",
-      "답변 길이 편차가 있습니다."
-    ],
-    "practiceDirections": [
-      "성과를 숫자로 정리하세요.",
-      "프로젝트별 역할을 한 문장으로 먼저 말하세요.",
-      "마지막 문장을 직무 연결로 닫으세요."
-    ]
+    "strengths": ["직무 연결이 잘 되었습니다.", "답변 흐름이 안정적입니다.", "협업 경험이 드러났습니다."],
+    "weaknesses": ["성과 근거가 약합니다.", "역할 설명이 일부 추상적입니다.", "답변 길이 편차가 있습니다."],
+    "practiceDirections": ["성과를 숫자로 정리하세요.", "프로젝트별 역할을 먼저 말하세요.", "직무 연결 문장으로 마무리하세요."]
   }
 }
 ```
 
-## 5. Decision 응답 구조
-
-모든 면접 decision 응답은 아래 구조를 사용한다.
+5문항 미만 또는 실패 세션:
 
 ```json
 {
-  "type": "FOLLOW_UP",
-  "message": "답변의 본인 역할 설명이 부족하여 꼬리질문을 진행합니다.",
-  "retryCount": 1,
-  "followUpCountForCurrentQuestion": 1,
-  "nextQuestion": {
-    "questionType": "FOLLOW_UP",
-    "questionText": "해당 프로젝트에서 본인이 맡은 역할을 더 구체적으로 설명해 주세요."
-  }
+  "reportGenerated": false,
+  "deleted": true,
+  "deletedReason": "UNDER_MIN_TURNS",
+  "finalResult": null
 }
 ```
 
-## 6. 공통 에러 응답 형식
+5문항 기준은 모든 질문을 포함한 실제 진행 문항 수 기준이다.
 
-모든 공개 API와 내부 API는 아래 형식을 사용한다.
+### 4-8. 면접 세션 목록 조회
+
+- Method: `GET`
+- Path: `/ai/interview/sessions`
+- Auth: required
+
+Response:
 
 ```json
 {
-  "errorCode": "STT_FAILED",
-  "message": "음성 인식에 실패했습니다.",
-  "retryable": true,
-  "details": {
-    "retryCount": 1
-  }
+  "items": [
+    {
+      "sessionId": "ivs-001",
+      "companyName": "OpenAI Korea",
+      "positionName": "Backend Engineer",
+      "documentSufficiency": "SUFFICIENT",
+      "status": "FINISHED",
+      "totalQuestionCount": 10,
+      "finalTotalScore": 84,
+      "createdAt": "2026-03-30T12:00:00Z"
+    }
+  ]
 }
 ```
 
-## 7. 저장 정책 기준
+### 4-9. 면접 세션 상세 조회
 
-- 영구 저장:
-  - `interview_sessions`
-  - `interview_turns`
-  - `question_text`
-  - `answer_video_title`
-  - `answer_full_text`
-  - `feedback_text`
-  - `nonverbal_summary_text`
-  - `final report`
-- 임시 저장 후 세션 종료 10분 내 삭제:
-  - `raw transcript`
-  - `raw vision metrics`
-  - `hidden score`
-  - `session intermediate state`
-  - `failed session temporary artifacts`
-- 장기 저장 안 함:
-  - `raw video`
-  - `raw frame image`
+- Method: `GET`
+- Path: `/ai/interview/sessions/:sessionId`
+- Auth: required
+
+세션 상세 응답에는 `documentSufficiency`가 포함되어야 한다.
+
+### 4-10. 면접 턴 조회
+
+- Method: `GET`
+- Path: `/ai/interview/sessions/:sessionId/turns`
+- Auth: required
+
+Response:
+
+```json
+{
+  "items": [
+    {
+      "turnNo": 1,
+      "questionType": "SELF_INTRO",
+      "questionText": "1분 자기소개 부탁드립니다.",
+      "answerVideoTitle": "answer-turn-1.mp4",
+      "answerFullText": "안녕하세요. 백엔드 직무에 지원한 홍길동입니다.",
+      "feedbackText": "본인 역할과 성과 근거를 더 구체화하면 좋습니다.",
+      "nonverbalSummaryText": "얼굴 유지율은 안정적이었고 큰 장해 요소는 없었습니다."
+    }
+  ]
+}
+```
+
+## 5. 내부 API
+
+내부 API는 NestJS만 호출한다.
+
+- `POST /internal/jobs/analyze`
+- `POST /internal/cover-letter/feedback`
+- `POST /internal/interview/start`
+- `POST /internal/interview/answer`
+- `POST /internal/interview/finish`
+
+내부 API는 공개 API와 같은 정책을 따르되, FastAPI 내부 처리에 필요한 `answerVideoStorageKey`, raw transcript 참조값, raw vision metrics 참조값을 사용할 수 있다. 이 값들은 영구 저장 대상이 아니다.
+
+## 6. 상태값
+
+### 6-1. InterviewSessionStatus
+
+- `IN_PROGRESS`
+- `FINISHED`
+- `FAILED`
+- `CANCELLED`
+
+`CANCELLED`는 사용자가 중간 종료했거나 5문항 미만으로 종료되어 리포트 없이 종료 처리된 상태다.
+
+### 6-2. VisionResultStatus
+
+- `VALID`: 정상 반영
+- `WEAKENED`: 저조도/가림 등으로 점수 반영 약화
+- `INVALID`: 다중 얼굴 등으로 해당 턴 Vision 무효
+- `SKIPPED`: 텍스트 답변 전환 등으로 Vision 자체를 사용하지 않음
+
+## 7. 공통 에러 코드
+
+- `DOCUMENT_INSUFFICIENT`
+- `FIRST_QUESTION_GENERATION_FAILED`
+- `ANSWER_UPLOAD_FAILED`
+- `STT_FAILED`
+- `TEXT_ANSWER_REQUIRED`
+- `VISION_INVALID`
+- `NEXT_QUESTION_GENERATION_FAILED`
+- `SESSION_TOO_SHORT_TO_REPORT`
+- `TEMP_CLEANUP_PENDING`
+- `INTERNAL_AI_UNAVAILABLE`
+- `INTERNAL_AUTH_INVALID`
+- `INVALID_REQUEST`
+
+## 8. 저장 정책 요약
+
+영구 저장:
+
+- `interview_sessions`
+- `interview_turns`
+- `question_text`
+- `answer_video_title`
+- `answer_full_text`
+- `feedback_text`
+- `nonverbal_summary_text`
+- 최종 리포트
+
+세션 종료 후 10분 내 삭제:
+
+- raw transcript
+- raw vision metrics
+- hidden score
+- 세션 중간 상태
+- 실패 세션 임시 분석 데이터
+- 임시 업로드 답변 영상
+
+장기 저장 금지:
+
+- raw video
+- raw frame image

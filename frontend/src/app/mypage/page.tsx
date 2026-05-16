@@ -75,12 +75,22 @@ export default function MyPage() {
     const currentUser = getStoredUser();
     const accessToken = getAccessToken();
 
-    if (!currentUser || !accessToken) {
+    // 2026-05-16 수정: 보호 페이지 접근 기준을 토큰 존재 여부로 맞춰 사용자 캐시 누락 시에도 접근을 막지 않음
+    if (!accessToken) {
       setUser(null);
       return;
     }
 
-    setUser(currentUser);
+    // 2026-05-16 수정: 저장된 사용자 정보가 없어도 토큰 기반 API 검증을 먼저 진행하도록 기본 표시값을 사용함
+    setUser(
+      currentUser ?? {
+        id: '',
+        email: '',
+        username: '',
+        displayName: '로그인 사용자',
+        role: 'USER',
+      },
+    );
 
     const loadMyPageData = async () => {
       const [authored, liked, reports] = await Promise.all([

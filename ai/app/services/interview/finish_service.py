@@ -1,13 +1,21 @@
 from collections import Counter
 from datetime import datetime, timezone
+import json
 
+import httpx
+
+from app.core.config import settings
 from app.adapters.redis_state_store import redis_interview_state_store
 from app.schemas.common import InterviewSessionStatus
 from app.schemas.interview import (
     FinalReport,
+    FinalQuestionAnswerItem,
+    FinalTurnFeedbackItem,
     InterviewFinishRequest,
     InterviewFinishResponse,
 )
+
+OPENAI_TIMEOUT_SECONDS = 20.0
 
 
 # 2026.04.25 신규: 13단계 최종 리포트 생성을 위해 hidden score를 집계해 종료 응답을 만든다
@@ -55,6 +63,8 @@ async def interview_finish_service(
             "positionName": session_state.get("positionName"),
             "jdText": session_state.get("jdText"),
             "documents": session_state.get("documents", {}),
+            # 2026-05-07 신규: cleanup 시 면접 RAG collection도 삭제할 수 있게 식별자 유지
+            "interviewRagCollectionId": session_state.get("interviewRagCollectionId"),
             # 2026-04-29 신규: cleanup 시 임시 업로드 답변 영상 삭제 대상을 유지
             "tempVideoStorageKeys": session_state.get("tempVideoStorageKeys", []),
             "finalReport": final_report.model_dump(),
@@ -103,7 +113,7 @@ def _build_final_report(
     average_nonverbal = round(sum(nonverbal_scores) / len(nonverbal_scores))
     insufficiency_counter = _count_insufficiency_reasons(hidden_scores)
 
-    return FinalReport(
+    base_report = FinalReport(
         totalScore=max(0, min(total_score, 100)),
         grade=_build_grade(total_score),
         summary=_build_summary(
@@ -128,9 +138,16 @@ def _build_final_report(
         ),
         weaknesses=_build_weaknesses(insufficiency_counter),
         practiceDirections=_build_practice_directions(insufficiency_counter),
-        questionAnswers=[],
-        turnFeedbacks=[],
+        questionAnswers=_build_question_answers(hidden_scores),
+        turnFeedbacks=_build_turn_feedbacks(hidden_scores),
     )
+    # 2026-05-06 신규: 누적 질문/답변/점수를 읽는 LLM report_generator agent 결과를 서버 검증 후 반영
+    llm_report = _request_openai_final_report(
+        session_state=session_state,
+        hidden_scores=hidden_scores,
+        base_report=base_report,
+    )
+    return llm_report or base_report
 
 
 def _build_grade(total_score: int) -> str:
@@ -256,6 +273,146 @@ def _count_insufficiency_reasons(
                 if normalized:
                     counter[normalized] += 1
     return counter
+
+
+# 2026-05-06 신규: 최종 리포트에 질문-답변 복기 목록을 포함
+def _build_question_answers(
+    hidden_scores: list[dict[str, object]],
+) -> list[FinalQuestionAnswerItem]:
+    items: list[FinalQuestionAnswerItem] = []
+    for index, score in enumerate(hidden_scores, start=1):
+        question_text = str(score.get("questionText") or "").strip()
+        answer_full_text = str(score.get("answerFullText") or "").strip()
+        if not question_text or not answer_full_text:
+            continue
+        items.append(
+            FinalQuestionAnswerItem(
+                turnNumber=int(score.get("turnNumber") or index),
+                questionText=question_text,
+                answerFullText=answer_full_text,
+            )
+        )
+    return items
+
+
+# 2026-05-06 신규: 최종 리포트에 턴별 피드백 목록을 포함
+def _build_turn_feedbacks(
+    hidden_scores: list[dict[str, object]],
+) -> list[FinalTurnFeedbackItem]:
+    items: list[FinalTurnFeedbackItem] = []
+    for index, score in enumerate(hidden_scores, start=1):
+        question_text = str(score.get("questionText") or "").strip()
+        feedback_text = str(score.get("feedbackText") or "").strip()
+        nonverbal_summary_text = str(score.get("nonverbalSummaryText") or "").strip()
+        if not question_text or not feedback_text:
+            continue
+        items.append(
+            FinalTurnFeedbackItem(
+                turnNumber=int(score.get("turnNumber") or index),
+                questionText=question_text,
+                feedbackText=feedback_text,
+                nonverbalSummaryText=nonverbal_summary_text,
+            )
+        )
+    return items
+
+
+# 2026-05-06 신규: 누적 면접 흐름을 읽어 강점/보완점/연습 방향을 생성하는 LLM 리포트 agent
+def _request_openai_final_report(
+    session_state: dict[str, object],
+    hidden_scores: list[dict[str, object]],
+    base_report: FinalReport,
+) -> FinalReport | None:
+    if not settings.OPENAI_API_KEY:
+        return None
+
+    system_prompt = """
+너는 면접 최종 리포트를 작성하는 report_generator agent다.
+JSON만 반환한다.
+
+규칙:
+1. 총점과 등급은 서버가 계산한 값을 그대로 사용한다.
+2. 질문/답변/피드백/점수 근거 안에서만 강점과 보완점을 작성한다.
+3. JD의 직무상세, 지원자격, 우대사항, retrievedEvidence와 답변 연결도를 중심으로 평가한다.
+4. 없는 경험이나 성과를 만들어내지 않는다.
+5. summary는 2~3문장, strengths/weaknesses/practiceDirections는 각각 3개로 작성한다.
+
+반환 형식:
+{
+  "summary": "문자열",
+  "strengths": ["문자열", "문자열", "문자열"],
+  "weaknesses": ["문자열", "문자열", "문자열"],
+  "practiceDirections": ["문자열", "문자열", "문자열"]
+}
+""".strip()
+
+    request_body = {
+        "model": settings.OPENAI_JOB_ANALYSIS_MODEL,
+        "response_format": {"type": "json_object"},
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {
+                "role": "user",
+                "content": json.dumps(
+                    {
+                        "companyName": session_state.get("companyName"),
+                        "positionName": session_state.get("positionName"),
+                        "jdText": str(session_state.get("jdText") or "")[:5000],
+                        "baseReport": base_report.model_dump(),
+                        # 2026-05-06 신규: 리포트 생성 agent에는 질문/답변/피드백 핵심 범위만 전달
+                        "turns": [
+                            {
+                                **score,
+                                "answerFullText": str(score.get("answerFullText") or "")[:1200],
+                                "feedbackText": str(score.get("feedbackText") or "")[:500],
+                            }
+                            for score in hidden_scores
+                        ],
+                    },
+                    ensure_ascii=False,
+                ),
+            },
+        ],
+        "temperature": 0.2,
+    }
+
+    try:
+        with httpx.Client(timeout=OPENAI_TIMEOUT_SECONDS) as client:
+            response = client.post(
+                "https://api.openai.com/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {settings.OPENAI_API_KEY}",
+                    "Content-Type": "application/json",
+                },
+                json=request_body,
+            )
+            response.raise_for_status()
+            data = response.json()
+        parsed = json.loads(data["choices"][0]["message"]["content"])
+        summary = str(parsed.get("summary") or "").strip()
+        strengths = _normalize_report_list(parsed.get("strengths"))
+        weaknesses = _normalize_report_list(parsed.get("weaknesses"))
+        practice_directions = _normalize_report_list(parsed.get("practiceDirections"))
+        if not summary or len(strengths) != 3 or len(weaknesses) != 3 or len(practice_directions) != 3:
+            return None
+        return base_report.model_copy(
+            update={
+                "summary": summary,
+                "strengths": strengths,
+                "weaknesses": weaknesses,
+                "practiceDirections": practice_directions,
+            }
+        )
+    except Exception:
+        return None
+
+
+# 2026-05-06 신규: LLM 리포트 배열 결과를 서버 계약에 맞게 3개 문자열로 검증
+def _normalize_report_list(value: object) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    normalized = [str(item).strip() for item in value if str(item).strip()]
+    return normalized[:3]
 
 
 def _normalize_reason(reason: str) -> str:

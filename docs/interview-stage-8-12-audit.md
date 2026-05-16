@@ -126,6 +126,9 @@
 - `ai/app/services/interview/start_service.py`
 - `ai/app/services/interview/question_planner.py`
 - `ai/app/services/interview/answer_service.py`
+- `ai/app/services/interview/vision_service.py`
+- `ai/app/services/vision/base.py`
+- `ai/app/services/vision/mediapipe_backend.py`
 - `ai/app/schemas/interview.py`
 - `backend/src/interview/dto/interview-session.dto.ts`
 - `backend/src/interview/interview.service.ts`

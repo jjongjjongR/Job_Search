@@ -8,8 +8,8 @@
 
 - `interview:session:{sessionId}:state`
 - `interview:session:{sessionId}:hidden-score:{turnNumber}`
-- `interview:session:{sessionId}:transcript:{turnNumber}`
-- `interview:session:{sessionId}:vision:{turnNumber}`
+- `interview:session:{sessionId}:raw-transcript:{turnNumber}`
+- `interview:session:{sessionId}:raw-vision:{turnNumber}`
 - `interview:session:{sessionId}:stt-retry:{turnNumber}`
 - `interview:session:{sessionId}:cleanup`
 
@@ -53,9 +53,9 @@
 ### 3-3. raw transcript
 
 - Key:
-  - `interview:session:{sessionId}:transcript:{turnNumber}`
+  - `interview:session:{sessionId}:raw-transcript:{turnNumber}`
 - 용도:
-  - STT 원문 저장
+  - raw transcript 참조값 또는 STT 원문 임시 저장
 - 예시 값:
 
 ```json
@@ -69,9 +69,9 @@
 ### 3-4. raw vision
 
 - Key:
-  - `interview:session:{sessionId}:vision:{turnNumber}`
+  - `interview:session:{sessionId}:raw-vision:{turnNumber}`
 - 용도:
-  - Vision 원시 지표 저장
+  - raw vision metrics 참조값 또는 Vision 원시 지표 임시 저장
 - 예시 값:
 
 ```json
@@ -148,7 +148,7 @@
 - `POST /internal/interview/start`
   - Redis state 초기화
 - `POST /internal/interview/answer`
-  - transcript / vision / hidden-score / stt-retry 저장
+  - raw-transcript / raw-vision / hidden-score / stt-retry 저장
   - 세션 key TTL 연장
 - `POST /internal/interview/finish`
   - cleanup key 저장

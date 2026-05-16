@@ -8,7 +8,7 @@
 
 - JD 분석 결과를 기준으로 검색 query를 만든다.
 - 자기소개서, 이력서, 포트폴리오, JD를 chunk로 나눈다.
-- chunk를 벡터화해서 SQLite 벡터 저장소에 저장한다.
+- chunk를 벡터화해서 ChromaDB collection에 저장한다.
 - RAG Retriever Agent가 관련 근거 chunk를 검색한다.
 - Evaluator Agent는 검색된 근거를 우선 사용해 항목별 점수를 낸다.
 - 서버는 점수 근거가 실제 문서에 있는지 다시 검증한다.
@@ -28,7 +28,7 @@ POST /ai/cover-letter/feedback
       4. Cover Letter Evaluator Agent
       5. Draft Generator Agent
       6. Draft Reviewer Agent
-  -> 점수/근거/초안/신뢰도 반환
+  -> 점수/근거/수정 방향 예시/신뢰도 반환
   -> cover_letter_reports 저장
 ```
 
@@ -52,6 +52,8 @@ jd_analyzer
 
 각 node는 하나의 agent 함수를 실행한다.
 
+자료/요구사항 기준상 자소서 AI는 생성 기능이 아니라 피드백/평가 기능이다. 여기서 Draft 계열 Agent는 최종 제출용 자소서를 생성하는 기능이 아니라, 평가 결과를 이해하기 위한 수정 방향 예시를 만드는 내부 보조 노드다.
+
 LangGraph가 설치된 환경에서는 `StateGraph`를 사용한다. 설치되지 않은 로컬 환경에서도 서버가 죽지 않도록 같은 순서를 fallback runner가 실행한다.
 
 왜 이렇게 했는가:
@@ -64,14 +66,14 @@ LangGraph가 설치된 환경에서는 `StateGraph`를 사용한다. 설치되�
 파일: `ai/app/services/cover_letter/vector_rag_store.py`
 
 현재 구현:
-- SQLite 테이블 `cover_letter_vectors`에 chunk와 vector를 저장한다.
-- 각 chunk는 `collection_id`, `chunk_id`, `source`, `text`, `metadata_json`, `vector_json`을 가진다.
-- 검색은 cosine similarity로 수행한다.
+- ChromaDB PersistentClient를 사용해 로컬 디스크에 collection을 저장한다.
+- 각 chunk는 `collection_id`, `chunk_id`, `source`, `text`, `metadata`, `embedding`을 가진다.
+- 검색은 ChromaDB의 cosine distance 기반 query로 수행한다.
 
 현재 vector 방식:
 - OpenAI embedding API를 바로 붙이지 않고, 해시 기반 로컬 embedding을 사용한다.
 - 이유는 OpenAI embedding 장애나 비용 문제 없이 로컬 테스트가 가능해야 하기 때문이다.
-- 구조는 벡터 저장소로 분리되어 있어서 나중에 pgvector, Chroma, FAISS로 교체 가능하다.
+- 구조는 벡터 저장소로 분리되어 있어서 나중에 Chroma 서버, pgvector, FAISS로 교체 가능하다.
 
 저장 대상:
 - JD
@@ -180,7 +182,7 @@ LangGraph가 설치된 환경에서는 `StateGraph`를 사용한다. 설치되�
 파일: `draft_generator_agent.py`
 
 역할:
-- 평가 결과와 RAG 근거를 바탕으로 수정 초안을 만든다.
+- 평가 결과와 RAG 근거를 바탕으로 수정 방향 예시를 만든다.
 - 원본 문항 수를 유지한다.
 - 각 문항에 소제목을 붙인다.
 - 마크다운, 괄호, 불필요한 장식 문법을 제거한다.
@@ -195,7 +197,7 @@ LangGraph가 설치된 환경에서는 `StateGraph`를 사용한다. 설치되�
 파일: `draft_reviewer_agent.py`
 
 역할:
-- 생성 초안을 다시 검사한다.
+- 수정 방향 예시를 다시 검사한다.
 - 문항 수, 형식, JD 연결, 과장 여부를 확인한다.
 
 기준:
@@ -260,7 +262,7 @@ AI 항목별 판단
 운영 시 주의:
 - 사용자 원문을 외부 로그에 남기지 않는다.
 - 벡터 DB에는 원문 chunk가 들어가므로 운영 배포 시 암호화/접근 제어가 필요하다.
-- 운영 환경에서는 SQLite 대신 RDS pgvector 또는 관리형 vector DB로 교체하는 것이 좋다.
+- 운영 환경에서는 Chroma 서버, RDS pgvector 또는 관리형 vector DB로 확장하는 것이 좋다.
 
 ## 8. 운영 관점
 
@@ -275,7 +277,7 @@ AI 항목별 판단
 - `verified=false` rubric 비율
 - RAG 검색 chunk 수
 - OpenAI 실패율
-- 초안 reviewer 실패율
+- 수정 방향 예시 reviewer 실패율
 
 ## 9. 예상 질문 답변
 
@@ -293,19 +295,19 @@ AI 항목별 판단
 
 질문: LangGraph를 왜 쓰나?
 
-답변: agent 실행 순서를 코드로 고정하기 위해 쓴다. JD 분석, RAG 검색, 근거 추출, 평가, 초안 생성, 초안 검토가 임의 순서로 섞이지 않게 한다.
+답변: agent 실행 순서를 코드로 고정하기 위해 쓴다. JD 분석, RAG 검색, 근거 추출, 평가, 수정 방향 예시 작성, 수정 방향 예시 검토가 임의 순서로 섞이지 않게 한다.
 
-질문: SQLite면 진짜 vector DB인가?
+질문: ChromaDB면 진짜 vector DB인가?
 
-답변: 현재는 로컬 개발용 경량 벡터 저장소다. chunk와 vector를 DB에 저장하고 cosine similarity로 검색한다. 구조는 vector DB 방식이며, 운영 단계에서는 pgvector나 Chroma로 교체하는 것이 맞다.
+답변: 그렇다. 현재는 ChromaDB PersistentClient로 collection, chunk, embedding, metadata를 저장하고 cosine 기준으로 검색한다. 로컬 개발에서는 서버 없이 쓰고, 운영 단계에서는 Chroma 서버나 pgvector로 확장할 수 있다.
 
-질문: 초안이 과장될 가능성은?
+질문: 수정 방향 예시가 과장될 가능성은?
 
 답변: Draft Generator Agent는 RAG 근거에 없는 새 경험을 만들지 말라는 기준으로 생성하고, Draft Reviewer Agent가 문항 수, 형식, JD 연결, 과장 여부를 다시 검사한다.
 
 ## 10. 남은 고도화
 
-1. SQLite vector store를 PostgreSQL pgvector로 교체한다.
+1. ChromaDB PersistentClient를 Chroma 서버 또는 PostgreSQL pgvector로 확장한다.
 2. OpenAI embedding 또는 한국어 embedding 모델을 붙인다.
 3. LangGraph conditional edge를 추가해 confidence가 낮으면 추가 자료 요청 또는 재평가로 보낸다.
 4. 리포트 상세 화면에 rubric 근거와 RAG 근거를 표시한다.

@@ -24,10 +24,12 @@ def _request_openai_interview_evaluation(
     answer_text: str,
     jd_text: str,
     position_name: str,
+    retrieved_evidence: list[dict[str, object]] | None = None,
 ) -> dict[str, object] | None:
     if not settings.OPENAI_API_KEY:
         return None
 
+    # 2026-05-07 수정: RAG 근거가 답변 내용을 대체해 점수를 올리지 않도록 평가 기준을 명확히 제한
     system_prompt = """
 너는 면접 답변 평가기다.
 반드시 구조화된 JSON만 반환해라.
@@ -40,6 +42,13 @@ def _request_openai_interview_evaluation(
 - logicStructure: 0~10
 - authenticityAttitude: 0~5
 - totalContentScore: 위 항목 합계, 0~85
+
+근거 사용 규칙:
+- 점수는 반드시 answerText에 실제로 말한 내용 기준으로 매긴다.
+- retrievedEvidence는 JD/자소서/이력서/포트폴리오 맥락 검증용으로만 참고한다.
+- answerText에 없는 역할, 성과, 기술, 프로젝트는 retrievedEvidence에 있어도 점수 근거로 사용하지 않는다.
+- answerText와 retrievedEvidence가 직접 연결될 때만 jobFit을 보조적으로 높게 볼 수 있다.
+- retrievedEvidence와 답변이 충돌하거나 답변 근거가 부족하면 없는 내용을 만들어내지 말고 보수적으로 평가한다.
 
 충분성 기준:
 - questionRelevance >= 15
@@ -92,6 +101,7 @@ def _request_openai_interview_evaluation(
                         "answerText": answer_text,
                         "jdText": jd_text,
                         "positionName": position_name,
+                        "retrievedEvidence": retrieved_evidence or [],
                     },
                     ensure_ascii=False,
                 ),
@@ -167,6 +177,7 @@ def evaluate_interview_answer(
     answer_text: str,
     jd_text: str,
     position_name: str,
+    retrieved_evidence: list[dict[str, object]] | None = None,
 ) -> dict[str, object]:
     llm_result = _request_openai_interview_evaluation(
         question_type=question_type,
@@ -174,6 +185,7 @@ def evaluate_interview_answer(
         answer_text=answer_text,
         jd_text=jd_text,
         position_name=position_name,
+        retrieved_evidence=retrieved_evidence,
     )
     if llm_result:
         return llm_result
@@ -182,6 +194,9 @@ def evaluate_interview_answer(
     lowered_answer = cleaned_answer.lower()
     lowered_question = question_text.lower()
     lowered_jd = jd_text.lower()
+    # 2026-05-07 신규: LLM 실패 시에도 RAG 근거 텍스트를 직무 연결성 판단에 보조 반영
+    evidence_text = " ".join(str(item.get("text") or "") for item in (retrieved_evidence or []))
+    lowered_evidence = evidence_text.lower()
     answer_length = len(cleaned_answer)
 
     question_tokens = [
@@ -197,10 +212,15 @@ def evaluate_interview_answer(
 
     question_hits = sum(1 for token in question_tokens[:6] if token in lowered_answer)
     jd_hits = sum(1 for token in jd_tokens[:10] if token in lowered_answer)
+    evidence_hits = sum(
+        1
+        for token in re.findall(r"[A-Za-z][A-Za-z0-9.+#-]{1,}|[가-힣]{2,}", evidence_text)[:12]
+        if token.lower() in lowered_answer
+    )
     has_metric = bool(re.search(r"\d", cleaned_answer))
     has_role = any(token in cleaned_answer for token in ["역할", "담당", "기여", "제가", "저는", "주도"])
     has_result = any(token in cleaned_answer for token in ["결과", "개선", "성과", "달성", "향상", "해결"])
-    has_job_link = any(token in lowered_answer for token in jd_tokens[:8]) or any(
+    has_job_link = any(token in lowered_answer for token in jd_tokens[:8]) or evidence_hits >= 2 or any(
         signal in cleaned_answer for signal in ["직무", "업무", "포지션", "실무"]
     )
     has_detail = answer_length >= 110 and any(
@@ -224,7 +244,7 @@ def evaluate_interview_answer(
     question_relevance = min(20, question_relevance)
     specificity = min(20, 7 + (6 if has_detail else 0) + (4 if answer_length >= 180 else 0) + (3 if has_metric else 0))
     evidence_result = min(15, 4 + (6 if has_result else 0) + (3 if has_metric else 0) + (2 if has_detail else 0))
-    job_fit = min(15, 4 + min(jd_hits, 4) * 2 + (3 if has_job_link else 0))
+    job_fit = min(15, 4 + min(jd_hits, 4) * 2 + min(evidence_hits, 2) + (3 if has_job_link else 0))
     logic_structure = min(10, 4 + (4 if has_structure else 0) + (2 if answer_length >= 150 else 0))
     authenticity_attitude = min(5, 2 + (2 if has_attitude else 0) + (1 if "저" in cleaned_answer else 0))
     total_score = (
@@ -300,11 +320,29 @@ def evaluate_interview_answer(
 def build_follow_up_question(
     focus: str | None,
     question_text: str,
+    answer_text: str = "",
+    jd_text: str = "",
+    position_name: str = "",
 ) -> str:
+    # 2026-05-06 신규: 직전 답변과 JD 맥락을 읽는 LLM 꼬리질문 agent를 우선 사용
+    llm_question = _request_openai_follow_up_question(
+        focus=focus,
+        question_text=question_text,
+        answer_text=answer_text,
+        jd_text=jd_text,
+        position_name=position_name,
+    )
+    if llm_question and _validate_follow_up_question(
+        follow_up_question=llm_question,
+        answer_text=answer_text,
+        jd_text=jd_text,
+    ):
+        return llm_question
+
     focus_to_question = {
-        "role_contribution": "방금 사례에서 본인이 맡은 역할과 실제 기여도를 더 구체적으로 설명해 주세요.",
-        "evidence_result": "그 경험의 성과를 수치나 결과 근거 중심으로 더 설명해 주세요.",
-        "job_fit": "방금 경험이 지원 직무와 어떻게 연결되는지 한 번 더 구체적으로 말씀해 주세요.",
+        "role_contribution": "방금 답변에서 본인이 직접 맡은 역할과 기여도를 더 구체적으로 설명해 주세요.",
+        "evidence_result": "방금 답변의 결과나 성과를 근거 중심으로 더 설명해 주세요.",
+        "job_fit": "방금 답변이 지원 직무와 어떻게 연결되는지 한 번 더 구체적으로 말씀해 주세요.",
         "technical_detail": "문제를 어떻게 분석하고 어떤 기준으로 해결했는지 과정 중심으로 설명해 주세요.",
         "collaboration_attitude": "협업 과정에서 어떤 방식으로 소통하고 조율했는지 더 설명해 주세요.",
     }
@@ -312,6 +350,108 @@ def build_follow_up_question(
         focus,
         f"{question_text}에 대해 조금 더 구체적인 근거를 덧붙여 설명해 주세요.",
     )
+
+
+# 2026-05-06 신규: 답변 부족점과 JD를 근거로 개인화 꼬리질문을 생성
+def _request_openai_follow_up_question(
+    focus: str | None,
+    question_text: str,
+    answer_text: str,
+    jd_text: str,
+    position_name: str,
+) -> str | None:
+    if not settings.OPENAI_API_KEY:
+        return None
+
+    system_prompt = """
+너는 실제 면접관처럼 꼬리질문을 만드는 followup_question_agent다.
+JSON만 반환한다.
+
+규칙:
+1. 직전 질문, 지원자 답변, JD를 모두 읽고 하나의 꼬리질문만 만든다.
+2. 답변에 없는 경험/역할/성과를 있다고 가정하지 않는다.
+3. "방금 답변에서 본인이 직접 맡은 역할..." 같은 고정 문장으로 만들지 않는다.
+4. followUpFocus는 참고하되, 실제 답변 맥락에 맞지 않으면 JD 연결 질문으로 바꾼다.
+5. 질문은 120자 이내로 작성한다.
+6. JD 키워드가 자연스럽게 연결될 수 있으면 포함한다.
+
+반환 형식:
+{"questionText": "문자열"}
+""".strip()
+
+    request_body = {
+        "model": settings.OPENAI_JOB_ANALYSIS_MODEL,
+        "response_format": {"type": "json_object"},
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {
+                "role": "user",
+                "content": json.dumps(
+                    {
+                        "followUpFocus": focus,
+                        "currentQuestion": question_text,
+                        "answerText": answer_text[:2500],
+                        "jdText": jd_text[:5000],
+                        "positionName": position_name,
+                    },
+                    ensure_ascii=False,
+                ),
+            },
+        ],
+        "temperature": 0.2,
+    }
+
+    try:
+        with httpx.Client(timeout=OPENAI_TIMEOUT_SECONDS) as client:
+            response = client.post(
+                "https://api.openai.com/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {settings.OPENAI_API_KEY}",
+                    "Content-Type": "application/json",
+                },
+                json=request_body,
+            )
+            response.raise_for_status()
+            data = response.json()
+        parsed = json.loads(data["choices"][0]["message"]["content"])
+        question_text = re.sub(r"\s+", " ", str(parsed.get("questionText") or "")).strip()
+        if 8 <= len(question_text) <= 120:
+            return question_text
+        return None
+    except Exception:
+        return None
+
+
+# 2026-05-06 신규: 꼬리질문이 답변/JD와 완전히 무관하거나 고정 문장으로 퇴화하지 않도록 서버 검증
+def _validate_follow_up_question(
+    follow_up_question: str,
+    answer_text: str,
+    jd_text: str,
+) -> bool:
+    blocked_phrases = [
+        "방금 답변에서 본인이 직접 맡은 역할",
+        "더 구체적으로 설명해 주세요",
+    ]
+    if any(phrase in follow_up_question for phrase in blocked_phrases):
+        return False
+
+    basis_tokens = {
+        token
+        for token in re.findall(
+            r"[A-Za-z][A-Za-z0-9.+#-]{1,}|[가-힣]{2,}",
+            f"{answer_text}\n{jd_text}",
+        )
+        if len(token) >= 2
+    }
+    question_tokens = {
+        token
+        for token in re.findall(
+            r"[A-Za-z][A-Za-z0-9.+#-]{1,}|[가-힣]{2,}",
+            follow_up_question,
+        )
+        if len(token) >= 2
+    }
+    return bool(basis_tokens.intersection(question_tokens))
 
 
 # 2026-04-15 신규: 비언어 평가는 12단계 이후 전 최소 기준으로만 반영

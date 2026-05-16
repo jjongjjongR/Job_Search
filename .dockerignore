@@ -1,0 +1,16 @@
+.git
+.idea
+.pytest_cache
+**/__pycache__
+**/*.pyc
+**/.DS_Store
+ai/.venv
+ai/data/chroma_rag
+backend/dist
+backend/node_modules
+backend/storage/temp
+backend/uploads
+frontend/.next
+frontend/.next_backup_*
+frontend/node_modules
+frontend/tsconfig.tsbuildinfo

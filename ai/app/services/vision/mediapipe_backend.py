@@ -37,22 +37,49 @@ class MediaPipeVisionBackend(VisionInferenceBackend):
         multi_face_detected = False
         low_light_count = 0
 
-        with mp.solutions.face_detection.FaceDetection(
-            model_selection=0,
-            min_detection_confidence=0.5,
-        ) as detector:
+        # 2026-05-05 수정: 현재 설치된 mediapipe에 solutions API가 없으면 OpenCV 얼굴 검출로 fallback
+        if hasattr(mp, "solutions"):
+            detector_context = mp.solutions.face_detection.FaceDetection(
+                model_selection=0,
+                min_detection_confidence=0.5,
+            )
+            with detector_context as detector:
+                for frame in sampled_frames:
+                    if self._is_low_light(frame):
+                        low_light_count += 1
+
+                    rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                    result = detector.process(rgb_frame)
+                    detections = result.detections or []
+
+                    if detections:
+                        face_detected_count += 1
+                    if len(detections) > 1:
+                        multi_face_detected = True
+        else:
+            # 2026-05-05 신규: MediaPipe solutions 미지원 환경에서도 Vision 단계가 500으로 터지지 않게 OpenCV cascade 사용
+            cascade_path = (
+                Path(cv2.data.haarcascades) / "haarcascade_frontalface_default.xml"
+            )
+            face_detector = cv2.CascadeClassifier(str(cascade_path))
+            if face_detector.empty():
+                return self._skipped_metrics()
+
             for frame in sampled_frames:
                 if self._is_low_light(frame):
                     low_light_count += 1
 
-                rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                result = detector.process(rgb_frame)
-                detections = result.detections or []
+                gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                detections = face_detector.detectMultiScale(
+                    gray_frame,
+                    scaleFactor=1.1,
+                    minNeighbors=5,
+                    minSize=(40, 40),
+                )
 
-                if detections:
+                if len(detections) > 0:
                     face_detected_count += 1
-                if len(detections) > 1:
-                    multi_face_detected = True
+                # 2026-05-05 수정: OpenCV cascade fallback은 오탐이 잦아 다중 얼굴 무효 판정에는 사용하지 않음
 
         frame_count = len(sampled_frames)
         face_detected_ratio = face_detected_count / frame_count

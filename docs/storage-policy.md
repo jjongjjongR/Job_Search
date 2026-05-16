@@ -31,9 +31,9 @@
 
 예시:
 
-- temp answer video
-- raw transcript json
-- raw vision metrics json
+- `temp/interview-video/`
+- `temp/raw-transcript/`
+- `temp/raw-vision/`
 
 ### 2-3. Redis temp state
 
@@ -62,7 +62,7 @@ PostgreSQL 영구 저장 대상:
 - `answer_full_text`
 - `feedback_text`
 - `nonverbal_summary_text`
-- `final report`
+- 최종 리포트
 - `cover_letter_reports`
 - `job_analysis_requests`
 
@@ -77,7 +77,7 @@ PostgreSQL 영구 저장 대상:
 - document_sufficiency
 - status
 - total_question_count
-- final_score
+- final_total_score
 - final_summary
 - final_strengths_json
 - final_weaknesses_json
@@ -95,7 +95,6 @@ PostgreSQL 영구 저장 대상:
 - answer_full_text
 - feedback_text
 - nonverbal_summary_text
-- vision_result_status
 - created_at
 
 `answer_full_text` 기준:
@@ -145,9 +144,9 @@ PostgreSQL 영구 저장 대상:
 저장 위치:
 
 - private temp storage
-  - temp answer video
-  - raw transcript json
-  - raw vision metrics json
+  - `temp/interview-video/`
+  - `temp/raw-transcript/`
+  - `temp/raw-vision/`
 - Redis temp state
   - current session state
   - hidden score
@@ -179,7 +178,9 @@ PostgreSQL 영구 저장 대상:
 - 실패 종료:
   - 세션 종료 후 10분 내 삭제
 - 5문항 미만 종료:
-  - 리포트 생성 없이 임시 데이터까지 삭제
+  - `CANCELLED` 상태로 리포트 없이 종료 처리
+  - 5문항 기준은 모든 질문을 포함한 실제 진행 문항 수 기준
+  - 임시 데이터와 부분 분석 데이터까지 삭제
 
 ### 6-2. 삭제 대상
 
@@ -203,7 +204,7 @@ PostgreSQL 영구 저장 대상:
     "documentSufficiency": "SUFFICIENT",
     "status": "FINISHED",
     "totalQuestionCount": 10,
-    "finalScore": 81,
+    "finalTotalScore": 81,
     "finalSummary": "전반적으로 논리 구조는 좋지만 근거 설명은 더 필요합니다."
   },
   "interviewTurns": [
@@ -225,9 +226,9 @@ PostgreSQL 영구 저장 대상:
 
 ```json
 {
-  "tempAnswerVideoKey": "interview/temp/video/ivs-001/turn-3.mp4",
-  "rawTranscriptFileKey": "interview/temp/transcript/ivs-001/turn-3.json",
-  "rawVisionMetricsFileKey": "interview/temp/vision/ivs-001/turn-3.json",
+  "tempAnswerVideoKey": "temp/interview-video/ivs-001-turn-3.mp4",
+  "rawTranscriptFileKey": "temp/raw-transcript/ivs-001-turn-3.json",
+  "rawVisionMetricsFileKey": "temp/raw-vision/ivs-001-turn-3.json",
   "deleteAfterSeconds": 600
 }
 ```

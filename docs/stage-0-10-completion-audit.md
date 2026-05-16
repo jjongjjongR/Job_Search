@@ -65,8 +65,8 @@
 ### 4단계
 
 - `interview:session:{sessionId}:state`
-- `interview:session:{sessionId}:transcript:{turnId}`
-- `interview:session:{sessionId}:vision:{turnId}`
+- `interview:session:{sessionId}:raw-transcript:{turnId}`
+- `interview:session:{sessionId}:raw-vision:{turnId}`
 - `interview:session:{sessionId}:hidden-score:{turnId}`
 - `interview:session:{sessionId}:stt-retry:{turnId}`
 - `interview:session:{sessionId}:cleanup`

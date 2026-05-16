@@ -12,6 +12,7 @@ from app.services.interview.answer_evaluator import build_follow_up_question
 def resolve_next_interview_step(
     session_state: dict[str, object],
     evaluation: dict[str, object],
+    answer_text: str = "",
 ) -> DecisionResponse:
     planned_questions = list(session_state.get("plannedQuestions", []))
     current_plan_index = int(session_state.get("currentPlanIndex", 0))
@@ -20,11 +21,16 @@ def resolve_next_interview_step(
 
     is_sufficient = bool(evaluation.get("isSufficient"))
     follow_up_focus = evaluation.get("followUpFocus")
+    jd_text = str(session_state.get("jdText", "")).strip()
+    position_name = str(session_state.get("positionName", "")).strip()
 
     if (not is_sufficient) and follow_up_count < 2:
         next_question_text = build_follow_up_question(
             focus=str(follow_up_focus) if follow_up_focus else None,
             question_text=current_question_text,
+            answer_text=answer_text,
+            jd_text=jd_text,
+            position_name=position_name,
         )
         return DecisionResponse(
             type=InterviewDecisionType.FOLLOW_UP,

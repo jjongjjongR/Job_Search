@@ -59,7 +59,8 @@ export class InterviewService {
     userId: string,
     payload: StartInterviewSessionRequestDto,
   ): Promise<StartInterviewSessionResponseDto> {
-    const resolvedStartInput = await this.resolveStartInput(payload);
+    // 2026-05-05 수정: 공고 ID를 비워도 사용자의 최신 JD 분석 결과로 면접을 시작할 수 있게 함
+    const resolvedStartInput = await this.resolveStartInput(userId, payload);
     const sessionId = this.createSessionId();
     const response = await this.aiClientService.startInterview({
       sessionId,
@@ -259,7 +260,10 @@ export class InterviewService {
   }
 
   // 2026.04.25 신규: 자료 기준인 jobAnalysisRequestId 재사용 시작 흐름과 직접 입력 fallback을 함께 지원
-  private async resolveStartInput(payload: StartInterviewSessionRequestDto) {
+  private async resolveStartInput(
+    userId: string,
+    payload: StartInterviewSessionRequestDto,
+  ) {
     const documents = await this.resolveDocuments(payload);
 
     if (payload.jobAnalysisRequestId) {
@@ -279,6 +283,16 @@ export class InterviewService {
     }
 
     if (!payload.companyName || !payload.positionName || !payload.jdText) {
+      const latestJobAnalysis = await this.jobsService.getLatestAnalysisByUser(userId);
+      if (latestJobAnalysis) {
+        return {
+          companyName: latestJobAnalysis.companyName,
+          positionName: latestJobAnalysis.positionName,
+          jdText: latestJobAnalysis.jdText,
+          documents,
+        };
+      }
+
       throw new BadRequestException(
         '면접 시작에는 jobAnalysisRequestId 또는 회사명/직무명/JD 본문이 필요합니다.',
       );

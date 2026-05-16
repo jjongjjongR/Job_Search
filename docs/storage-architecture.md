@@ -29,18 +29,19 @@
   - `dataroom_item`
   - `report_artifact`
 - temp 목적
-  - `interview_answer_upload`
-  - `raw_transcript`
-  - `raw_vision_metrics`
+  - `interview_video`
+  - `raw-transcript`
+  - `raw-vision`
 
 ## 4. key 규칙
 
-- 로컬 저장 key는 `{bucket}/{purpose}/{timestamp}-{sanitized-file-name}` 형식을 사용한다.
+- 로컬 저장 key는 자료 기준상 `{bucket}/{purpose}/{timestamp}-{sanitized-file-name}` 형식을 사용한다.
 - 예:
   - `durable/user_document/1760100000000-resume.txt`
   - `durable/dataroom_item/1760100000001-guide.pdf`
-  - `temp/interview_answer_upload/1760100000002-answer-video.mp4`
-  - `temp/raw_transcript/1760100000003-turn-1.json`
+  - `temp/interview-video/1760100000002-answer-video.mp4`
+  - `temp/raw-transcript/1760100000003-turn-1.json`
+  - `temp/raw-vision/1760100000004-turn-1.json`
 
 ## 5. protected download 원칙
 
@@ -54,7 +55,7 @@
 - raw frame image
 
 위 항목은 `temp` 목적에만 둘 수 있도록 설계해야 한다.
-현재 구조에서는 영상 임시 업로드는 `interview_answer_upload`, transcript 원본은 `raw_transcript`, vision 원본은 `raw_vision_metrics` 목적을 사용한다.
+자료 기준에서는 영상 임시 업로드는 `temp/interview-video/`, transcript 원본은 `temp/raw-transcript/`, vision 원본은 `temp/raw-vision/` 아래에 둔다.
 즉, raw video나 raw frame image가 durable 목적값으로 저장되지는 않도록 입력 단계에서 목적을 분리했다.
 
 ## 7. 이후 S3 전환 방향
@@ -67,4 +68,4 @@
 
 - 자료실 업로드는 `dataroom_item` 목적값으로 저장한다.
 - 다운로드는 기존처럼 인증 후 서버 경유 방식으로 유지한다.
-- 면접 temp 파일 저장은 다음 단계 기능 구현 시 `interview_answer_upload`, `raw_transcript`, `raw_vision_metrics` 목적값으로 연결하면 된다.
+- 면접 temp 파일은 자료 기준에 맞춰 `temp/interview-video/`, `temp/raw-transcript/`, `temp/raw-vision/` 경로 정책을 따른다.
