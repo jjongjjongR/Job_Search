@@ -21,4 +21,9 @@ export default () => ({
     internalSharedSecret:
       process.env.AI_INTERNAL_SHARED_SECRET ?? 'replace-with-internal-secret',
   },
+  // 2026-05-18 신규: AWS 이전 시 storage provider 값을 설정에서 추적할 수 있게 명시
+  storage: {
+    provider: process.env.STORAGE_PROVIDER ?? 'local',
+    root: process.env.BACKEND_STORAGE_ROOT ?? 'storage',
+  },
 });

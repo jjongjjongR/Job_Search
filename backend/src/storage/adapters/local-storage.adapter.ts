@@ -11,8 +11,10 @@ import {
 
 @Injectable()
 export class LocalStorageAdapter implements StoragePort {
-  // 2026-04-10 신규: durable/temp 저장 루트를 한 곳에서 관리
-  private readonly storageRoot = path.join(process.cwd(), 'storage');
+  // 2026-05-18 수정: Docker/ECS/EFS 등 배포 환경에서 storage root를 환경변수로 고정할 수 있게 변경
+  private readonly storageRoot = path.resolve(
+    process.env.BACKEND_STORAGE_ROOT ?? path.join(process.cwd(), 'storage'),
+  );
 
   async save(input: SaveFileInput): Promise<StoredFile> {
     const bucket = getStorageBucketByPurpose(input.purpose);

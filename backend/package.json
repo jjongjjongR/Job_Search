@@ -4,6 +4,7 @@
   "description": "",
   "author": "",
   "private": true,
+  "packageManager": "pnpm@10.32.1",
   "license": "UNLICENSED",
   "scripts": {
     "build": "nest build",
@@ -24,17 +25,17 @@
     "test:e2e": "jest --config ./test/jest-e2e.json"
   },
   "dependencies": {
-    "@nestjs/common": "^11.0.1",
+    "@nestjs/common": "^11.1.21",
     "@nestjs/config": "^4.0.2",
-    "@nestjs/core": "^11.0.1",
+    "@nestjs/core": "^11.1.21",
     "@nestjs/jwt": "^11.0.0",
     "@nestjs/passport": "^11.0.5",
-    "@nestjs/platform-express": "^11.0.1",
-    "@nestjs/swagger": "^11.2.0",
+    "@nestjs/platform-express": "^11.1.21",
+    "@nestjs/swagger": "^11.2.6",
     "@nestjs/typeorm": "^11.0.0",
     "bcrypt": "^6.0.0",
     "class-transformer": "^0.5.1",
-    "class-validator": "^0.14.1",
+    "class-validator": "^0.14.4",
     "multer": "^2.1.1",
     "openai": "^5.1.0",
     "passport": "^0.7.0",
@@ -42,7 +43,7 @@
     "pg": "^8.15.6",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
-    "typeorm": "^0.3.23"
+    "typeorm": "^0.3.29"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.2.0",
@@ -70,8 +71,8 @@
     "ts-jest": "^29.2.5",
     "ts-loader": "^9.5.2",
     "ts-node": "^10.9.2",
-    "typeorm-ts-node-commonjs": "^0.3.20",
     "tsconfig-paths": "^4.2.0",
+    "typeorm-ts-node-commonjs": "^0.3.20",
     "typescript": "^5.7.3",
     "typescript-eslint": "^8.20.0"
   },
@@ -98,6 +99,14 @@
       "@scarf/scarf",
       "@swc/core",
       "bcrypt"
-    ]
+    ],
+    "overrides": {
+      "brace-expansion": "2.0.3",
+      "diff": "8.0.3",
+      "lodash": "4.18.0",
+      "minimatch": "9.0.7",
+      "path-to-regexp": "8.4.0",
+      "qs": "6.14.2"
+    }
   }
 }

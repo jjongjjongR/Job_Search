@@ -58,6 +58,8 @@ services:
     build:
       context: ./backend
     environment:
+      # 2026-05-18 신규: 로컬 compose는 운영 검증 모드가 아니라 시연/개발 모드로 실행
+      NODE_ENV: development
       PORT: 3001
       FRONTEND_URL: http://localhost:3000
       DB_HOST: postgres
@@ -72,6 +74,7 @@ services:
       AI_INTERNAL_SHARED_SECRET: local-internal-secret
       OPENAI_API_KEY: ""
       STORAGE_PROVIDER: local
+      BACKEND_STORAGE_ROOT: /app/storage
     ports:
       - "3001:3001"
     volumes:
@@ -82,7 +85,7 @@ services:
       ai:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://localhost:3001').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3001/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 10s
       timeout: 5s
       retries: 20

@@ -63,35 +63,35 @@
 - Redis 장애 시 면접 진행 상태 손실
 - key namespace 충돌
 
-## 4. Storage: local storage -> S3 private
+## 4. Storage: local storage -> EFS first, S3 later
 
 코드 수정 지점:
 
 - `backend/src/storage/ports/storage.port.ts`
 - `backend/src/storage/adapters/local-storage.adapter.ts`
-- 신규 `S3StorageAdapter`
+- 즉시 AWS 배포 기준: Backend와 AI가 같은 EFS mount를 `BACKEND_STORAGE_ROOT`로 사용
+- 장기 개선 기준: 신규 `S3StorageAdapter`
 - `backend/src/files/files.service.ts`
 - AI가 참조하는 `BACKEND_STORAGE_ROOT` 또는 S3 object resolver
 
 인프라 변경 지점:
 
-- private S3 bucket 생성
-- public access block 유지
-- ECS task role에 최소 권한 부여
-- temp prefix lifecycle rule 설정
+- 즉시 AWS 배포 기준: EFS 생성, Backend/AI ECS task에 같은 mount path 연결
+- 장기 개선 기준: private S3 bucket 생성, public access block 유지, ECS task role에 최소 권한 부여
+- temp 파일은 EFS cleanup worker 또는 S3 lifecycle rule 중 선택
 
 환경변수:
 
-- `STORAGE_PROVIDER=s3`
-- `S3_BUCKET`
-- `S3_REGION`
-- `S3_PRESIGNED_EXPIRES_SECONDS`
+- 즉시 AWS 배포 기준: `STORAGE_PROVIDER=local`
+- 즉시 AWS 배포 기준: `BACKEND_STORAGE_ROOT=/mnt/app-storage`
+- 장기 개선 기준: `STORAGE_PROVIDER=s3`, `S3_BUCKET`, `S3_REGION`, `S3_PRESIGNED_EXPIRES_SECONDS`
 
 위험 요소:
 
+- Backend와 AI가 서로 다른 storage root를 보면 Vision이 영상 파일을 찾지 못함
 - raw video/raw frame image 장기 저장 금지 위반
-- presigned URL 공개 범위 과다
-- temp object lifecycle 누락
+- temp file cleanup 누락
+- S3 전환 시 presigned URL 공개 범위 과다
 - 사용자별 object ownership 검증 누락
 
 ## 5. FastAPI: local container -> ECS private service
@@ -251,3 +251,33 @@
 6. Amplify frontend 배포
 7. GitHub Actions 자동화
 8. cleanup worker/EventBridge 전환
+
+## 11. 2026-05-18 AWS 이전 코드 상태
+
+완료된 방어:
+
+- Backend는 `NODE_ENV=production`에서 약한 `JWT_SECRET`, 약한 `AI_INTERNAL_SHARED_SECRET`, localhost URL, `DB_SYNCHRONIZE=true`를 시작 단계에서 차단한다.
+- Backend CORS는 `FRONTEND_URL`에 쉼표로 여러 origin을 넣을 수 있다.
+- Frontend rewrite는 `BACKEND_INTERNAL_API_BASE_URL`을 우선 사용하고, 없으면 `NEXT_PUBLIC_API_BASE_URL`, 마지막으로 로컬 backend를 사용한다.
+- Backend Docker와 Frontend Docker는 pnpm frozen install 기준으로 빌드된다.
+- Backend `packageManager`는 `pnpm@10.32.1`로 고정되어 Docker Corepack과 로컬 lockfile이 같은 기준을 사용한다.
+- 운영 dependency audit 기준 Backend/Frontend 모두 알려진 취약점 0개 상태다.
+
+AWS 배포 직전 필수값:
+
+- `NODE_ENV=production`
+- `FRONTEND_URL=https://실제-프론트-도메인`
+- `NEXT_PUBLIC_API_BASE_URL=https://실제-backend-도메인`
+- `BACKEND_INTERNAL_API_BASE_URL=https://실제-backend-도메인`
+- `JWT_SECRET`: 32자 이상 강한 값, Secrets Manager 보관
+- `AI_INTERNAL_SHARED_SECRET`: 32자 이상 강한 값, Backend와 AI 동일
+- `DB_SYNCHRONIZE=false`
+- `AI_INTERNAL_BASE_URL`: ECS 내부 AI 주소, localhost 금지
+- `REDIS_URL`: ElastiCache 주소
+- `OPENAI_API_KEY`: 실제 사용 시 Secrets Manager 보관
+
+아직 AWS 전환 전 남은 확인:
+
+- EFS mount path를 Backend/AI 양쪽에 같은 `BACKEND_STORAGE_ROOT`로 연결
+- 실제 면접 영상 샘플로 Vision 정상 케이스 검증
+- RDS 신규 DB에 migration 적용 검증

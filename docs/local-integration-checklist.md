@@ -118,8 +118,8 @@ cd frontend && pnpm dev
 
 ```bash
 cd ai && pytest
-cd backend && npm test -- --runInBand
-cd frontend && npm run build
+cd backend && pnpm test --runInBand
+cd frontend && pnpm run build
 ```
 
 현재 자동 테스트는 계약/규칙 단위 검증과 빌드 검증이다. 전체 브라우저 E2E는 이 문서의 수동 시나리오를 기준으로 수행한다.
@@ -138,6 +138,44 @@ cd frontend && npm run build
 - `/ai/cover-letter/feedback` 성공, 리포트 생성
 - Vision MediaPipe backend로 얼굴 미검출 샘플 영상 분석 성공: `status=INVALID`
 - temp cleanup 실제 실행 후 orphan 후보 14개 삭제, 재 dry-run 결과 삭제 후보 0개
+
+## 7. 2026-05-18 AWS 이전 preflight 결과
+
+확인한 항목:
+
+- `docker compose -p wjs_preflight up --build -d` 성공
+- 새 compose project 기준 PostgreSQL, Redis, AI, Backend healthy, Frontend 실행
+- Backend `/health`: `200 OK`, `{"status":"ok"}`
+- AI `/health`: `200 OK`, `{"status":"ok"}`
+- Frontend `/`: `200 OK`
+- 회원가입 `201`, 로그인 `201`, `/users/me` 보호 API `200`
+- `/jobs/analyze` `201`, `jobAnalysisRequestId` 생성
+- `/ai/cover-letter/feedback` `201`, `reportId` 생성
+- `/ai/interview/sessions/start` `201`, `documentSufficiency=SUFFICIENT`
+- `/ai/interview/sessions/:sessionId/answers` `201`, 텍스트 답변 기준 `visionResultStatus=SKIPPED`
+- `cd backend && pnpm run storage:cleanup-temp`: `ok=true`, 실제 삭제 대상 0개
+- `cd backend && pnpm audit --prod`: 취약점 0개
+- `cd frontend && pnpm audit --prod`: 취약점 0개
+- `cd ai && .venv/bin/pytest`: 10개 통과
+
+남은 수동 확인:
+
+- 실제 면접 영상 파일로 `python ai/scripts/check_vision_sample.py <영상경로>` 실행
+- AWS 전환 시 `STORAGE_PROVIDER=s3`는 현재 코드가 의도적으로 차단하므로, S3 adapter 구현 후 전환
+
+Vision 정상 얼굴 샘플 검증 명령:
+
+```bash
+cd ai
+.venv/bin/python scripts/check_vision_sample.py /path/to/interview-face.mp4
+```
+
+기대 기준:
+
+- `status`: `VALID`
+- `face_detected_ratio`: 보통 `0.6` 이상
+- `multi_face_detected`: `false`
+- `low_light`: `false`
 
 제한:
 
