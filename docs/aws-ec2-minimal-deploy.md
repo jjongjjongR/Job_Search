@@ -14,6 +14,12 @@
 - Temp state: Redis, Docker 내부 네트워크 전용
 - 파일 저장: Docker volume `backend-storage`
 
+공개 URL 라우팅:
+
+- `/`: Next.js frontend
+- `/api/auth/*`: Next.js NextAuth
+- `/backend/*`: NestJS backend
+
 ## AWS 콘솔에서 할 것
 
 1. EC2 인스턴스 1대를 생성한다.
@@ -63,11 +69,16 @@ cp .env.production.example .env.production
 - `NEXTAUTH_URL`
 - `JWT_SECRET`
 - `DB_PASSWORD`
+- `DB_SYNCHRONIZE`: 최초 발표용 DB 생성이 필요하면 `true`로 1회 실행 후 `false`로 되돌림
 - `AI_INTERNAL_SHARED_SECRET`
 - `NEXTAUTH_SECRET`
 - `OPENAI_API_KEY`는 실제 AI 모델 호출이 필요할 때만 입력
 
 `JWT_SECRET`, `AI_INTERNAL_SHARED_SECRET`, `NEXTAUTH_SECRET`은 레포에 커밋하지 않는다.
+
+회원가입에서 `500`이 나고 backend 로그에 `relation "users" does not exist` 또는 `QueryFailedError`가 보이면 DB 테이블이 아직 없는 상태다. 발표용 빠른 해결은 `.env.production`에서 `DB_SYNCHRONIZE=true`로 바꿔 1회 재기동한 뒤, 테이블 생성 확인 후 다시 `false`로 되돌리는 것이다.
+
+브라우저 Network 탭에서 회원가입 요청이 `/api/auth/signup`으로 보이면 이전 frontend 번들이 아직 사용 중인 상태다. EC2 배포용 compose는 backend API prefix를 `/backend`로 고정하므로, 최신 코드를 pull한 뒤 frontend를 다시 build해야 한다.
 
 ## Nginx 설정 적용
 
@@ -92,7 +103,7 @@ curl -I http://127.0.0.1:3000/
 
 ```bash
 curl -I http://EC2_PUBLIC_IP/
-curl -i http://EC2_PUBLIC_IP/api/health
+curl -i http://EC2_PUBLIC_IP/backend/health
 ```
 
 ## GitHub Actions 자동 배포

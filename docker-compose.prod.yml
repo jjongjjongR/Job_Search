@@ -73,7 +73,7 @@ services:
       DB_USERNAME: ${DB_USERNAME}
       DB_PASSWORD: ${DB_PASSWORD}
       DB_NAME: ${DB_NAME}
-      DB_SYNCHRONIZE: "false"
+      DB_SYNCHRONIZE: ${DB_SYNCHRONIZE:-false}
       JWT_SECRET: ${JWT_SECRET}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-1h}
       AI_INTERNAL_BASE_URL: http://ai:8000
@@ -100,10 +100,12 @@ services:
     build:
       context: ./frontend
       args:
-        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-/api}
+        # 2026-05-23 수정: NextAuth /api/auth와 충돌하지 않도록 EC2 배포용 backend 공개 prefix를 /backend로 고정
+        NEXT_PUBLIC_API_BASE_URL: /backend
     restart: unless-stopped
     environment:
-      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-/api}
+      # 2026-05-23 수정: EC2 .env.production에 과거 /api 값이 남아 있어도 frontend가 /backend를 사용하게 고정
+      NEXT_PUBLIC_API_BASE_URL: /backend
       BACKEND_INTERNAL_API_BASE_URL: http://backend:3001
       NEXTAUTH_URL: ${NEXTAUTH_URL}
       NEXTAUTH_SECRET: ${NEXTAUTH_SECRET}
