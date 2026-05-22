@@ -1,0 +1,30 @@
+name: Deploy to EC2
+
+on:
+  push:
+    branches:
+      # 2026-05-22 수정: 현재 배포 서버가 origin/master를 기준으로 git pull 하므로 trigger branch를 master로 맞춤
+      - master
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure SSH key
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/ec2_key
+          chmod 600 ~/.ssh/ec2_key
+          ssh-keyscan -H "${{ secrets.EC2_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Deploy with Docker Compose
+        run: |
+          ssh -i ~/.ssh/ec2_key "${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}" << 'EOF'
+            set -e
+            cd "${{ secrets.EC2_APP_DIR }}"
+            git pull --ff-only
+            docker compose -f docker-compose.prod.yml --env-file .env.production up --build -d
+            docker compose -f docker-compose.prod.yml --env-file .env.production ps
+            curl -fsS http://127.0.0.1:3000/ > /dev/null
+            curl -fsS http://127.0.0.1:3001/health > /dev/null
+          EOF
