@@ -31,7 +31,8 @@ export function normalizeOriginalName(originalname: string) {
 }
 
 export function sanitizeStoredFilename(originalname: string) {
-  return normalizeOriginalName(originalname).replace(/[^a-zA-Z0-9._-]/g, '_');
+  // 2026-05-22 수정: 한글 파일명이 저장 경로에서 외계어/밑줄로 깨지지 않도록 유니코드 문자와 공백을 보존
+  return normalizeOriginalName(originalname).replace(/[^\p{L}\p{N}._ -]/gu, '_');
 }
 
 export function createDownloadDisposition(filename: string) {
