@@ -76,7 +76,12 @@ cp .env.production.example .env.production
 
 `JWT_SECRET`, `AI_INTERNAL_SHARED_SECRET`, `NEXTAUTH_SECRET`은 레포에 커밋하지 않는다.
 
-회원가입에서 `500`이 나고 backend 로그에 `relation "users" does not exist` 또는 `QueryFailedError`가 보이면 DB 테이블이 아직 없는 상태다. 발표용 빠른 해결은 `.env.production`에서 `DB_SYNCHRONIZE=true`로 바꿔 1회 재기동한 뒤, 테이블 생성 확인 후 다시 `false`로 되돌리는 것이다.
+회원가입에서 `500`이 나고 backend 로그에 `relation "users" does not exist` 또는 `QueryFailedError`가 보이면 DB 테이블이 아직 없는 상태다. 정상 해결은 migration을 실행해 테이블을 생성하는 것이다.
+
+```bash
+docker compose -f docker-compose.prod.yml --env-file .env.production exec backend pnpm run migration:run:prod
+docker compose -f docker-compose.prod.yml --env-file .env.production exec postgres psql -U postgres -d world_job_search -c "\dt"
+```
 
 브라우저 Network 탭에서 회원가입 요청이 `/api/auth/signup`으로 보이면 이전 frontend 번들이 아직 사용 중인 상태다. EC2 배포용 compose는 backend API prefix를 `/backend`로 고정하므로, 최신 코드를 pull한 뒤 frontend를 다시 build해야 한다.
 
@@ -94,6 +99,7 @@ sudo systemctl reload nginx
 ```bash
 cd /opt/world-jobsearch/source
 docker compose -f docker-compose.prod.yml --env-file .env.production up --build -d
+docker compose -f docker-compose.prod.yml --env-file .env.production exec backend pnpm run migration:run:prod
 docker compose -f docker-compose.prod.yml --env-file .env.production ps
 curl -i http://127.0.0.1:3001/health
 curl -I http://127.0.0.1:3000/

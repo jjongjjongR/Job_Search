@@ -23,8 +23,12 @@ jobs:
             set -e
             cd "${{ secrets.EC2_APP_DIR }}"
             git pull --ff-only
+            # 2026-05-23 수정: 이전 orphan/container 이름 충돌을 막되 DB volume은 지우지 않도록 -v 없이 중지
+            docker compose -f docker-compose.prod.yml --env-file .env.production down --remove-orphans
             docker compose -f docker-compose.prod.yml --env-file .env.production up --build -d
             docker compose -f docker-compose.prod.yml --env-file .env.production ps
+            # 2026-05-23 신규: production DB에 users 등 서비스 테이블이 없으면 배포 직후 migration으로 생성
+            docker compose -f docker-compose.prod.yml --env-file .env.production exec -T backend pnpm run migration:run:prod
 
             echo "Waiting for frontend..."
             for i in $(seq 1 30); do

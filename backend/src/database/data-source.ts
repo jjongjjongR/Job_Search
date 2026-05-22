@@ -62,6 +62,7 @@ export default new DataSource({
     InterviewSession,
     InterviewTurn,
   ],
-  migrations: ['src/database/migrations/*.ts'],
+  // 2026-05-23 수정: EC2 production 컨테이너에서 dist/database/migrations/*.js를 인식하도록 __dirname 기준으로 변경
+  migrations: [path.join(__dirname, 'migrations/*.{ts,js}')],
   synchronize: false,
 });

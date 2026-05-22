@@ -14,6 +14,7 @@
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/main",
     "migration:run": "node scripts/run-migrations.js",
+    "migration:run:prod": "node node_modules/typeorm/cli.js migration:run -d dist/database/data-source.js",
     "migration:show": "node scripts/show-migrations.js",
     "storage:cleanup-temp": "node scripts/cleanup-temp-storage.js",
     "migration:generate": "typeorm-ts-node-commonjs -d src/database/data-source.ts migration:generate src/database/migrations/Generated",
