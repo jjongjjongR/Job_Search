@@ -43,6 +43,9 @@ function loadEnvFile(filePath: string) {
 loadEnvFile(path.resolve(process.cwd(), '.env.local'));
 loadEnvFile(path.resolve(process.cwd(), '.env'));
 
+// 2026-05-23 수정: TypeORM glob brace pattern(*.{ts,js})이 production에서 깨져 실행 파일 확장자별 단순 glob만 사용
+const migrationFileExtension = __filename.endsWith('.js') ? 'js' : 'ts';
+
 export default new DataSource({
   type: 'postgres',
   host: process.env.DB_HOST ?? 'localhost',
@@ -62,7 +65,8 @@ export default new DataSource({
     InterviewSession,
     InterviewTurn,
   ],
-  // 2026-05-23 수정: EC2 production 컨테이너에서 dist/database/migrations/*.js를 인식하도록 __dirname 기준으로 변경
-  migrations: [path.join(__dirname, 'migrations/*.{ts,js}')],
+  migrations: [
+    path.join(__dirname, `migrations/*.${migrationFileExtension}`),
+  ],
   synchronize: false,
 });
