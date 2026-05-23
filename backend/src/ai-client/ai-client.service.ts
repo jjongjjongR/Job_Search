@@ -21,7 +21,13 @@ export class AiClientService {
   private readonly sharedSecret: string;
   // 2026-04-10 신규: 내부 AI 서버 타임아웃 시간을 한 곳에서 관리
   // 2026-04-11 수정: OpenAI 기반 공고 분석 응답 시간을 감안해 내부 AI 타임아웃을 확장
-  private readonly requestTimeoutMs = 30000;
+  private readonly requestTimeoutMs = Number(
+    process.env.AI_INTERNAL_REQUEST_TIMEOUT_MS ?? 30000,
+  );
+  // 2026-05-23 신규: 자소서 피드백은 RAG + evaluator + draft + reviewer가 순차 실행되므로 별도 timeout을 둔다.
+  private readonly coverLetterFeedbackTimeoutMs = Number(
+    process.env.AI_COVER_LETTER_FEEDBACK_TIMEOUT_MS ?? 180000,
+  );
   // 2026-04-10 신규: 일시적 실패 시 한 번 더 시도하도록 재시도 횟수 추가
   private readonly retryCount = 1;
 
@@ -52,12 +58,22 @@ export class AiClientService {
 
   // 2026-04-10 신규: 자소서 피드백 내부 API 호출 메서드 추가
   async createCoverLetterFeedback(payload: object) {
-    return this.post('/internal/cover-letter/feedback', payload);
+    return this.post('/internal/cover-letter/feedback', payload, {
+      retryCount: 0,
+      timeoutMs: this.coverLetterFeedbackTimeoutMs,
+    });
   }
 
-  private async post(path: string, payload: object) {
+  private async post(
+    path: string,
+    payload: object,
+    options?: { retryCount?: number; timeoutMs?: number },
+  ) {
     // 2026-04-10 수정: timeout, retry, 에러 매핑을 공통 POST 로직에 모음
-    for (let attempt = 0; attempt <= this.retryCount; attempt += 1) {
+    const maxRetryCount = options?.retryCount ?? this.retryCount;
+    const timeoutMs = options?.timeoutMs ?? this.requestTimeoutMs;
+
+    for (let attempt = 0; attempt <= maxRetryCount; attempt += 1) {
       try {
         const response = await fetch(`${this.baseUrl}${path}`, {
           method: 'POST',
@@ -66,7 +82,7 @@ export class AiClientService {
             'x-internal-shared-secret': this.sharedSecret,
           },
           body: JSON.stringify(payload),
-          signal: AbortSignal.timeout(this.requestTimeoutMs),
+          signal: AbortSignal.timeout(timeoutMs),
         });
 
         if (!response.ok) {
@@ -80,7 +96,7 @@ export class AiClientService {
         }
 
         if (error instanceof Error && error.name === 'TimeoutError') {
-          if (attempt < this.retryCount) {
+          if (attempt < maxRetryCount) {
             continue;
           }
 
@@ -89,7 +105,7 @@ export class AiClientService {
           );
         }
 
-        if (attempt < this.retryCount) {
+        if (attempt < maxRetryCount) {
           continue;
         }
 
