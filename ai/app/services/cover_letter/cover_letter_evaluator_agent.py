@@ -205,6 +205,7 @@ def run_cover_letter_evaluator_agent(
     payload: CoverLetterFeedbackRequest,
     jd_context: dict[str, object],
     evidence_context: dict[str, object],
+    validation_feedback: str | None = None,
 ) -> dict[str, object]:
     question_inputs = list(evidence_context["questionInputs"])
     openai_result = request_openai_json(
@@ -220,6 +221,7 @@ def run_cover_letter_evaluator_agent(
             "documents": evidence_context["documents"],
             "questionInputs": question_inputs,
             "retrievedEvidence": evidence_context["rag"]["retrievedEvidence"],
+            "validationFeedback": validation_feedback or "",
         },
     )
 

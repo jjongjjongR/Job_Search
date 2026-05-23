@@ -171,6 +171,7 @@ export class InterviewService {
         feedbackText: response.feedbackText,
         nonverbalSummaryText: response.nonverbalSummaryText,
         visionResultStatus: response.visionResultStatus,
+        evaluationValidation: response.evaluationValidation ?? null,
       },
       decision: {
         type: response.decision.type,

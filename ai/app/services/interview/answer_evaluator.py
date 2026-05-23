@@ -25,6 +25,7 @@ def _request_openai_interview_evaluation(
     jd_text: str,
     position_name: str,
     retrieved_evidence: list[dict[str, object]] | None = None,
+    validation_feedback: str | None = None,
 ) -> dict[str, object] | None:
     if not settings.OPENAI_API_KEY:
         return None
@@ -102,6 +103,7 @@ def _request_openai_interview_evaluation(
                         "jdText": jd_text,
                         "positionName": position_name,
                         "retrievedEvidence": retrieved_evidence or [],
+                        "validationFeedback": validation_feedback or "",
                     },
                     ensure_ascii=False,
                 ),
@@ -178,6 +180,7 @@ def evaluate_interview_answer(
     jd_text: str,
     position_name: str,
     retrieved_evidence: list[dict[str, object]] | None = None,
+    validation_feedback: str | None = None,
 ) -> dict[str, object]:
     llm_result = _request_openai_interview_evaluation(
         question_type=question_type,
@@ -186,6 +189,7 @@ def evaluate_interview_answer(
         jd_text=jd_text,
         position_name=position_name,
         retrieved_evidence=retrieved_evidence,
+        validation_feedback=validation_feedback,
     )
     if llm_result:
         return llm_result

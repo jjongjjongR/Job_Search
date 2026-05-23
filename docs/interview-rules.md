@@ -85,6 +85,8 @@
 
 ## 5. 답변 충분성 규칙
 
+답변 평가는 `answer_evaluator -> answer_evaluation_validator -> 서버 하네스` 순서를 따른다. `answer_evaluator`가 만든 점수와 충분성 판단은 곧바로 다음 질문 decision에 사용하지 않고, validator와 서버 규칙을 통과해야 한다.
+
 ### 5-1. 점수 기준
 
 - 질문 적합성: 20점 중 15점 이상
@@ -110,6 +112,41 @@
 - 결과/근거가 없음
 - 직무 연결이 약함
 - 너무 추상적임
+
+### 5-4. 평가 검증 규칙
+
+`answer_evaluation_validator`는 평가를 처음부터 다시 하는 agent가 아니라, 평가 결과가 실제 답변과 맞는지 검사하는 agent다.
+
+검증 기준:
+
+- 점수 근거가 `answer_full_text`에 실제로 있는가
+- 답변에 없는 역할, 성과, 기술, 프로젝트를 근거로 삼지 않았는가
+- retrievedEvidence를 답변 내용처럼 착각하지 않았는가
+- 충분 답변 판단이 5-1, 5-2 기준과 일치하는가
+- `followUpFocus`가 부족 사유와 맞는가
+- 꼬리질문이 필요한 답변을 충분 답변으로 잘못 처리하지 않았는가
+
+validator 출력:
+
+```json
+{
+  "valid": false,
+  "confidence": 0.58,
+  "reasons": [
+    "답변에 성과 수치가 없는데 evidenceResult 점수가 높습니다.",
+    "followUpFocus가 부족 사유와 맞지 않습니다."
+  ],
+  "retryInstruction": "성과/근거 점수를 낮추고 role_contribution 또는 evidence_result 중심으로 다시 평가하세요."
+}
+```
+
+재평가 규칙:
+
+- `valid=true`이면 Vision 분석과 다음 질문 decision으로 진행한다.
+- `valid=false`이면 `retryInstruction`을 `answer_evaluator`에 전달해 1회만 재평가한다.
+- 재평가 후에도 실패하면 서버 하네스가 보수적인 heuristic 평가 또는 fallback decision을 선택한다.
+- 재평가는 기본 1회로 제한하며 무한 반복하지 않는다.
+- retrievedEvidence는 맥락 참고용이며, `answer_full_text`에 없는 내용을 점수 근거로 쓰면 실패 처리한다.
 
 ## 6. Decision 규칙
 
@@ -148,6 +185,7 @@ Decision 타입:
 - 꼬리질문은 반드시 직전 답변의 부족점과 연결해야 한다.
 - 꼬리질문은 LLM follow-up agent가 직전 질문, 직전 답변, JD를 함께 읽고 생성한다.
 - 생성된 꼬리질문은 서버 하네스에서 답변/JD 근거와 고정 문장 여부를 검증한다.
+- 꼬리질문 생성 전 답변 평가는 `answer_evaluation_validator`를 통과해야 한다.
 - 답변에 없는 역할, 성과, 경험을 있다고 가정하면 실패 처리한다.
 - 꼬리질문 우선순위:
 
@@ -232,6 +270,7 @@ Vision 결과 상태:
 - 최종 점수와 등급은 서버가 계산한다.
 - 최종 요약, 강점, 보완점, 연습 방향은 LLM report generator가 누적 질문/답변/피드백을 읽고 생성한다.
 - LLM 리포트는 항목 수와 근거 범위를 서버가 검증한 뒤 저장한다.
+- 턴별 내용 평가 결과는 `answer_evaluation_validator`와 서버 하네스를 통과한 결과만 최종 리포트 계산에 사용한다.
 
 삭제 대상:
 

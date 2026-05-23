@@ -134,6 +134,10 @@ class ErrorCode(StrEnum):
     INTERNAL_AI_UNAVAILABLE = "INTERNAL_AI_UNAVAILABLE"
     # 내부 인증이 유효하지 않음
     INTERNAL_AUTH_INVALID = "INTERNAL_AUTH_INVALID"
+    # AI 평가 결과가 validator 검증을 통과하지 못함
+    AI_EVALUATION_VALIDATION_FAILED = "AI_EVALUATION_VALIDATION_FAILED"
+    # AI 평가 재시도 횟수를 모두 사용함
+    AI_EVALUATION_RETRY_EXHAUSTED = "AI_EVALUATION_RETRY_EXHAUSTED"
     # 요청 값이 유효하지 않음 (잘못된 파라미터 등)
     INVALID_REQUEST = "INVALID_REQUEST"
 
@@ -212,3 +216,26 @@ class ErrorResponse(BaseModel):
     message: str = Field(description="기본 에러 메시지")
     retryable: bool = Field(description="재시도 가능한 에러인지 여부")
     details: ErrorDetails | None = Field(default=None, description="추가 세부 정보")
+
+
+class EvaluationValidationResult(BaseModel):
+    """
+    2026.05.23 신규
+    evaluator agent 결과가 근거성과 점수 일관성 검증을 통과했는지 나타내는 공통 요약.
+    raw validator 응답은 장기 저장하지 않고 이 요약만 다음 단계와 응답에 사용한다.
+    """
+
+    valid: bool = Field(description="평가 결과가 validator 검증을 통과했는지 여부")
+    confidence: float = Field(description="validator 관점의 평가 일관성 신뢰도 0.0~1.0")
+    reasons: list[str] = Field(
+        default_factory=list,
+        description="검증 실패 또는 보정 판단 이유",
+    )
+    retryInstruction: str = Field(
+        default="",
+        description="재평가 시 evaluator에게 전달할 지시문",
+    )
+    retryCount: int = Field(
+        default=0,
+        description="validator 실패 후 evaluator를 재실행한 횟수",
+    )

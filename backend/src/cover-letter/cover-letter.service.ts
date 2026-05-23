@@ -81,6 +81,7 @@ export class CoverLetterService {
       jdAlignmentScore: response.jdAlignmentScore,
       jobFitScore: response.jobFitScore,
       confidence: response.confidence,
+      evaluationValidation: response.evaluationValidation ?? null,
       verifiedJdKeywords: response.verifiedJdKeywords,
       rubricScores: response.rubricScores,
       ragEvidence: response.ragEvidence,

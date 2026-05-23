@@ -280,6 +280,18 @@ export class InterviewEvaluationDto {
   @ApiProperty({ description: 'Vision 보조 평가 상태', example: 'VALID' })
   @IsString()
   visionResultStatus!: string;
+
+  @ApiPropertyOptional({
+    description: '답변 평가 validator 검증 요약',
+    type: Object,
+  })
+  evaluationValidation?: {
+    valid: boolean;
+    confidence: number;
+    reasons: string[];
+    retryInstruction?: string;
+    retryCount: number;
+  } | null;
 }
 
 export class SubmitInterviewAnswerResponseDto {

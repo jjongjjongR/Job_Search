@@ -12,6 +12,7 @@ def cover_letter_feedback_service(
 ) -> CoverLetterFeedbackResponse:
     graph_state = run_cover_letter_langgraph(payload)
     evaluation_context = graph_state["evaluationContext"]
+    evaluation_validation = graph_state.get("evaluationValidation")
     draft_context = graph_state["draftContext"]
     draft_review = graph_state["draftReview"]
 
@@ -35,6 +36,7 @@ def cover_letter_feedback_service(
         jdAlignmentScore=int(evaluation_context["jdAlignmentScore"]),
         jobFitScore=int(evaluation_context["jobFitScore"]),
         confidence=float(evaluation_context["confidence"]),
+        evaluationValidation=evaluation_validation,
         verifiedJdKeywords=list(evaluation_context["verifiedJdKeywords"]),
         rubricScores=list(evaluation_context["rubricScores"]),
         ragEvidence=list(evaluation_context["retrievedEvidence"]),

@@ -25,7 +25,9 @@ def test_job_analyze_manual_path_accepts_job_posting_url_alias(monkeypatch):
     assert "Python" in response.extractedSkills
 
 
-def test_question_plan_builds_ten_questions_for_jd_only():
+def test_question_plan_builds_ten_questions_for_jd_only(monkeypatch):
+    monkeypatch.setattr(settings, "OPENAI_API_KEY", None)
+
     plan = build_question_plan(
         company_name="OpenAI Korea",
         position_name="Backend Engineer",

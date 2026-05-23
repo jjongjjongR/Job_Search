@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 from app.schemas.common import (
     DecisionResponse,
     DocumentSufficiency,
+    EvaluationValidationResult,
     InterviewAnswerType,
     InterviewQuestionType,
     InterviewSessionStatus,
@@ -178,6 +179,10 @@ class InterviewAnswerResponse(BaseModel):
     nonverbalScore: int = Field(description="비언어 보조 평가 점수(15점 만점)")
     # 2026.04.25 신규: 13단계 최종 리포트 계산에 사용할 총점을 내부 응답에 포함
     totalScore: int = Field(description="턴 총점(100점 만점)")
+    evaluationValidation: EvaluationValidationResult | None = Field(
+        default=None,
+        description="답변 평가 validator 검증 요약",
+    )
     decision: DecisionResponse = Field(description="다음 진행 결정")
     tempArtifacts: TempArtifacts = Field(description="임시 저장 산출물 참조값")
 

@@ -11,6 +11,9 @@ from app.services.cover_letter.draft_reviewer_agent import run_draft_reviewer_ag
 from app.services.cover_letter.evidence_extractor_agent import (
     run_evidence_extractor_agent,
 )
+from app.services.cover_letter.evaluation_validator_agent import (
+    run_cover_letter_evaluation_validator_agent,
+)
 from app.services.cover_letter.jd_analyzer_agent import run_jd_analyzer_agent
 from app.services.cover_letter.rag_retriever_agent import run_rag_retriever_agent
 
@@ -21,6 +24,8 @@ class CoverLetterGraphState(TypedDict, total=False):
     ragContext: dict[str, Any]
     evidenceContext: dict[str, Any]
     evaluationContext: dict[str, Any]
+    evaluationValidation: Any
+    evaluationRetryCount: int
     draftContext: dict[str, Any]
     draftReview: dict[str, Any]
     graphRuntime: str
@@ -54,6 +59,38 @@ def _evaluator_node(state: CoverLetterGraphState) -> CoverLetterGraphState:
         jd_context=state["jdContext"],
         evidence_context=state["evidenceContext"],
     )
+    state["evaluationRetryCount"] = 0
+    return state
+
+
+def _evaluation_validator_node(state: CoverLetterGraphState) -> CoverLetterGraphState:
+    state["evaluationValidation"] = run_cover_letter_evaluation_validator_agent(
+        evaluation_context=state["evaluationContext"],
+        jd_context=state["jdContext"],
+        evidence_context=state["evidenceContext"],
+        retry_count=int(state.get("evaluationRetryCount", 0)),
+    )
+    return state
+
+
+def _evaluation_retry_router_node(state: CoverLetterGraphState) -> CoverLetterGraphState:
+    validation = state["evaluationValidation"]
+    if validation.valid or int(state.get("evaluationRetryCount", 0)) >= 1:
+        return state
+
+    state["evaluationRetryCount"] = 1
+    state["evaluationContext"] = run_cover_letter_evaluator_agent(
+        payload=state["payload"],
+        jd_context=state["jdContext"],
+        evidence_context=state["evidenceContext"],
+        validation_feedback=validation.retryInstruction,
+    )
+    state["evaluationValidation"] = run_cover_letter_evaluation_validator_agent(
+        evaluation_context=state["evaluationContext"],
+        jd_context=state["jdContext"],
+        evidence_context=state["evidenceContext"],
+        retry_count=1,
+    )
     return state
 
 
@@ -80,6 +117,8 @@ def _run_fallback_graph(payload: CoverLetterFeedbackRequest) -> CoverLetterGraph
         _rag_retriever_node,
         _evidence_extractor_node,
         _evaluator_node,
+        _evaluation_validator_node,
+        _evaluation_retry_router_node,
         _draft_generator_node,
         _draft_reviewer_node,
     ]:
@@ -99,6 +138,8 @@ def run_cover_letter_langgraph(payload: CoverLetterFeedbackRequest) -> CoverLett
     workflow.add_node("rag_retriever", _rag_retriever_node)
     workflow.add_node("evidence_extractor", _evidence_extractor_node)
     workflow.add_node("evaluator", _evaluator_node)
+    workflow.add_node("evaluation_validator", _evaluation_validator_node)
+    workflow.add_node("evaluation_retry_router", _evaluation_retry_router_node)
     workflow.add_node("draft_generator", _draft_generator_node)
     workflow.add_node("draft_reviewer", _draft_reviewer_node)
 
@@ -106,7 +147,9 @@ def run_cover_letter_langgraph(payload: CoverLetterFeedbackRequest) -> CoverLett
     workflow.add_edge("jd_analyzer", "rag_retriever")
     workflow.add_edge("rag_retriever", "evidence_extractor")
     workflow.add_edge("evidence_extractor", "evaluator")
-    workflow.add_edge("evaluator", "draft_generator")
+    workflow.add_edge("evaluator", "evaluation_validator")
+    workflow.add_edge("evaluation_validator", "evaluation_retry_router")
+    workflow.add_edge("evaluation_retry_router", "draft_generator")
     workflow.add_edge("draft_generator", "draft_reviewer")
     workflow.add_edge("draft_reviewer", END)
 

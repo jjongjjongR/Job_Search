@@ -14,6 +14,9 @@ from app.services.cover_letter.draft_reviewer_agent import OPENAI_REVIEW_PROMPT
 from app.services.cover_letter.evidence_extractor_agent import (
     run_evidence_extractor_agent,
 )
+from app.services.cover_letter.evaluation_validator_agent import (
+    run_cover_letter_evaluation_validator_agent,
+)
 from app.services.cover_letter.jd_analyzer_agent import run_jd_analyzer_agent
 from app.services.cover_letter.rag_retriever_agent import run_rag_retriever_agent
 from app.services.cover_letter.vector_rag_store import (
@@ -22,6 +25,7 @@ from app.services.cover_letter.vector_rag_store import (
     chunk_text,
 )
 from app.services.interview.answer_evaluator import evaluate_interview_answer
+from app.services.interview.evaluation_validator import validate_interview_evaluation
 from app.services.interview.rag_service import (
     build_interview_rag_collection,
     retrieve_interview_evidence,
@@ -74,11 +78,41 @@ def test_no_cost_cover_letter_graph_path_uses_local_fallback(monkeypatch):
     rag_context = run_rag_retriever_agent(payload, jd_context)
     evidence_context = run_evidence_extractor_agent(payload, jd_context, rag_context)
     evaluation = run_cover_letter_evaluator_agent(payload, jd_context, evidence_context)
+    validation = run_cover_letter_evaluation_validator_agent(
+        evaluation,
+        jd_context,
+        evidence_context,
+    )
 
     assert rag_context["chunkCount"] >= 3
     assert len(rag_context["retrievedEvidence"]) >= 1
     assert evaluation["source"] == "HEURISTIC"
     assert evaluation["retrievedEvidence"] == rag_context["retrievedEvidence"]
+    assert validation.valid is True
+    assert validation.retryCount == 0
+
+
+def test_cover_letter_evaluation_validator_rejects_overconfident_unverified_score(monkeypatch):
+    monkeypatch.setattr(settings, "OPENAI_API_KEY", None)
+    payload = _cover_letter_payload()
+    jd_context = run_jd_analyzer_agent(payload)
+    rag_context = run_rag_retriever_agent(payload, jd_context)
+    evidence_context = run_evidence_extractor_agent(payload, jd_context, rag_context)
+    evaluation = run_cover_letter_evaluator_agent(payload, jd_context, evidence_context)
+
+    for rubric_score in evaluation["rubricScores"]:
+        rubric_score.verified = False
+        rubric_score.score = rubric_score.maxScore
+    evaluation["totalScore"] = 88
+
+    validation = run_cover_letter_evaluation_validator_agent(
+        evaluation,
+        jd_context,
+        evidence_context,
+    )
+
+    assert validation.valid is False
+    assert validation.retryInstruction
 
 
 def test_interview_rag_evidence_does_not_replace_answer_score(monkeypatch):
@@ -109,3 +143,36 @@ def test_interview_rag_evidence_does_not_replace_answer_score(monkeypatch):
     assert evidence
     assert weak_answer["isSufficient"] is False
     assert weak_answer["scores"]["totalContentScore"] < 70
+
+
+def test_interview_evaluation_validator_rejects_answer_missing_claimed_result(monkeypatch):
+    monkeypatch.setattr(settings, "OPENAI_API_KEY", None)
+    evaluation = evaluate_interview_answer(
+        question_type="JD_FIT",
+        question_text="FastAPI 운영 경험을 설명해 주세요.",
+        answer_text="프로젝트를 했습니다. 열심히 했습니다.",
+        jd_text="FastAPI PostgreSQL Redis 기반 API 운영",
+        position_name="Backend Engineer",
+    )
+    evaluation["scores"]["evidenceResult"] = 14
+    evaluation["scores"]["totalContentScore"] = sum(
+        int(evaluation["scores"][key])
+        for key in [
+            "questionRelevance",
+            "specificity",
+            "evidenceResult",
+            "jobFit",
+            "logicStructure",
+            "authenticityAttitude",
+        ]
+    )
+
+    validation = validate_interview_evaluation(
+        evaluation=evaluation,
+        question_text="FastAPI 운영 경험을 설명해 주세요.",
+        answer_text="프로젝트를 했습니다. 열심히 했습니다.",
+        jd_text="FastAPI PostgreSQL Redis 기반 API 운영",
+    )
+
+    assert validation.valid is False
+    assert validation.retryInstruction

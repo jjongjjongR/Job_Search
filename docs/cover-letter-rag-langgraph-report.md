@@ -11,6 +11,8 @@
 - chunk를 벡터화해서 ChromaDB collection에 저장한다.
 - RAG Retriever Agent가 관련 근거 chunk를 검색한다.
 - Evaluator Agent는 검색된 근거를 우선 사용해 항목별 점수를 낸다.
+- Evaluation Validator Agent가 평가 결과의 근거성과 점수 일관성을 다시 검사한다.
+- 검증 실패 시 evaluator에게 실패 이유를 전달해 1회만 재평가한다.
 - 서버는 점수 근거가 실제 문서에 있는지 다시 검증한다.
 - LangGraph는 이 흐름을 node 단위로 고정한다.
 
@@ -26,8 +28,10 @@ POST /ai/cover-letter/feedback
       2. RAG Retriever Agent
       3. Evidence Extractor Agent
       4. Cover Letter Evaluator Agent
-      5. Draft Generator Agent
-      6. Draft Reviewer Agent
+      5. Evaluation Validator Agent
+      6. Evaluation Retry Router
+      7. Draft Generator Agent
+      8. Draft Reviewer Agent
   -> 점수/근거/수정 방향 예시/신뢰도 반환
   -> cover_letter_reports 저장
 ```
@@ -45,6 +49,8 @@ jd_analyzer
   -> rag_retriever
   -> evidence_extractor
   -> evaluator
+  -> evaluation_validator
+  -> evaluation_retry_router
   -> draft_generator
   -> draft_reviewer
   -> END
@@ -53,6 +59,8 @@ jd_analyzer
 각 node는 하나의 agent 함수를 실행한다.
 
 자료/요구사항 기준상 자소서 AI는 생성 기능이 아니라 피드백/평가 기능이다. 여기서 Draft 계열 Agent는 최종 제출용 자소서를 생성하는 기능이 아니라, 평가 결과를 이해하기 위한 수정 방향 예시를 만드는 내부 보조 노드다.
+
+`evaluation_validator`는 evaluator가 만든 결과를 바로 final로 보지 않기 위한 하네스 hook이다. validator가 근거 부족, 점수 과대평가, 항목 모순을 발견하면 `evaluation_retry_router`가 evaluator를 1회만 다시 실행한다. 1회 재평가 후에도 검증에 실패하면 서버 하네스가 보수 점수 또는 fallback 평가를 선택한다.
 
 LangGraph가 설치된 환경에서는 `StateGraph`를 사용한다. 설치되지 않은 로컬 환경에서도 서버가 죽지 않도록 같은 순서를 fallback runner가 실행한다.
 
@@ -177,7 +185,51 @@ LangGraph가 설치된 환경에서는 `StateGraph`를 사용한다. 설치되�
 - 근거가 없으면 해당 항목 점수를 감점한다.
 - 검증된 항목 비율로 `confidence`를 계산한다.
 
-### 5-5. Draft Generator Agent
+### 5-5. Evaluation Validator Agent
+
+파일 예정: `evaluation_validator_agent.py`
+
+역할:
+- Evaluator Agent의 평가 결과가 입력 근거와 맞는지 검사한다.
+- 평가를 처음부터 다시 수행하는 agent가 아니라, 평가 결과의 근거성, 일관성, 과장 여부를 검사하는 agent다.
+- validator 결과는 하네스의 분기 조건으로 사용한다.
+
+검증 기준:
+- `evidenceText`가 RAG 근거 또는 입력 문서와 실제로 연결되는가
+- 점수가 근거에 비해 과하게 높거나 낮지 않은가
+- 강점, 약점, 수정 방향이 서로 모순되지 않는가
+- JD 핵심 요구와 평가 항목이 연결되어 있는가
+- 입력 문서에 없는 경험을 평가 근거처럼 사용하지 않았는가
+- rubric 합계와 totalScore가 일관적인가
+
+출력:
+
+```json
+{
+  "valid": false,
+  "confidence": 0.62,
+  "reasons": [
+    "성과 근거가 부족한데 성과/근거 점수가 높습니다.",
+    "evidenceText가 입력 문서에서 직접 확인되지 않습니다."
+  ],
+  "retryInstruction": "성과/근거 점수를 낮추고 확인 가능한 문장만 근거로 사용하세요."
+}
+```
+
+### 5-6. Evaluation Retry Router
+
+역할:
+- validator 결과에 따라 다음 노드를 선택한다.
+- `valid=true`이면 Draft Generator Agent로 진행한다.
+- `valid=false`이면 evaluator에게 `retryInstruction`을 전달해 1회만 재평가한다.
+- 재평가 후에도 실패하면 무한 반복하지 않고 fallback 평가 또는 보수 점수를 선택한다.
+
+원칙:
+- 재평가 횟수는 기본 1회다.
+- validator는 서비스 결과를 직접 만들지 않는다.
+- validator는 평가 결과가 다음 단계로 넘어가도 되는지 판단하는 하네스 hook이다.
+
+### 5-7. Draft Generator Agent
 
 파일: `draft_generator_agent.py`
 
@@ -192,7 +244,7 @@ LangGraph가 설치된 환경에서는 `StateGraph`를 사용한다. 설치되�
 - `[문항 n] [소제목]` 형식을 지킨다.
 - 역할, 행동, 결과, 직무 연결이 보이게 작성한다.
 
-### 5-6. Draft Reviewer Agent
+### 5-8. Draft Reviewer Agent
 
 파일: `draft_reviewer_agent.py`
 
@@ -213,6 +265,8 @@ LangGraph가 설치된 환경에서는 `StateGraph`를 사용한다. 설치되�
 ```text
 AI 항목별 판단
   -> RAG 근거 우선 사용
+  -> Evaluation Validator Agent 검증
+  -> 검증 실패 시 1회 재평가
   -> 서버 근거 검증
   -> 근거 없는 항목 감점
   -> 총점 재계산
@@ -247,6 +301,8 @@ AI 항목별 판단
 ```
 
 `confidence`는 합격 가능성 자체가 아니라, 점수 근거가 실제 입력 문서에서 얼마나 확인되었는지 나타내는 값이다.
+
+validator의 `confidence`는 별도 의미를 가진다. 이것은 evaluator 결과가 근거, 점수, 항목 간 일관성 측면에서 얼마나 통과 가능해 보이는지를 나타내는 내부 검증 신호다. 사용자에게 보여줄 최종 신뢰도는 서버의 원문 근거 검증 결과와 함께 계산한다.
 
 ## 7. 보안 관점
 
@@ -291,7 +347,11 @@ AI 항목별 판단
 
 질문: 점수는 AI가 주나?
 
-답변: 항목별 판단은 AI가 한다. 하지만 서버가 각 점수의 근거 문장이 실제 입력 문서에 있는지 검증하고, 근거가 없으면 감점한 뒤 최종 점수와 confidence를 계산한다.
+답변: 항목별 초안 판단은 Evaluator Agent가 한다. 하지만 Evaluation Validator Agent가 먼저 근거성과 점수 일관성을 검사하고, 실패하면 1회 재평가한다. 그 다음 서버가 각 점수의 근거 문장이 실제 입력 문서에 있는지 다시 검증하고, 근거가 없으면 감점한 뒤 최종 점수와 confidence를 계산한다.
+
+질문: 평가한 LLM을 어떻게 믿나?
+
+답변: 평가 LLM 결과를 바로 저장하지 않는다. 별도 Evaluation Validator Agent가 평가 결과를 검사하고, 서버 하네스가 원문 근거와 점수 범위를 다시 확인한다. 즉 LLM 하나의 판단이 바로 최종 리포트가 되는 구조가 아니다.
 
 질문: LangGraph를 왜 쓰나?
 
@@ -309,6 +369,7 @@ AI 항목별 판단
 
 1. ChromaDB PersistentClient를 Chroma 서버 또는 PostgreSQL pgvector로 확장한다.
 2. OpenAI embedding 또는 한국어 embedding 모델을 붙인다.
-3. LangGraph conditional edge를 추가해 confidence가 낮으면 추가 자료 요청 또는 재평가로 보낸다.
-4. 리포트 상세 화면에 rubric 근거와 RAG 근거를 표시한다.
-5. 운영 환경에서 벡터 chunk 암호화와 자동 삭제 정책을 추가한다.
+3. Evaluation Validator Agent와 retry router를 실제 graph에 추가한다.
+4. LangGraph conditional edge를 추가해 validator 실패 또는 confidence 저하 시 재평가로 보낸다.
+5. 리포트 상세 화면에 rubric 근거와 RAG 근거를 표시한다.
+6. 운영 환경에서 벡터 chunk 암호화와 자동 삭제 정책을 추가한다.

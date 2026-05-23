@@ -3,6 +3,8 @@
 
 from pydantic import BaseModel, Field
 
+from app.schemas.common import EvaluationValidationResult
+
 
 class CoverLetterJobAnalysisInput(BaseModel):
     """
@@ -91,6 +93,10 @@ class CoverLetterFeedbackResponse(BaseModel):
     jdAlignmentScore: int = Field(description="JD 반영도 점수")
     jobFitScore: int = Field(description="직무 적합도 점수")
     confidence: float = Field(description="점수 신뢰도 0.0~1.0")
+    evaluationValidation: EvaluationValidationResult | None = Field(
+        default=None,
+        description="평가 validator 검증 요약",
+    )
     verifiedJdKeywords: list[str] = Field(
         default_factory=list,
         description="JD 원문 안에서 확인된 평가 기준 키워드",

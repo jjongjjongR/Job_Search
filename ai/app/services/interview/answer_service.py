@@ -16,6 +16,7 @@ from app.schemas.interview import (
 from app.services.interview.answer_evaluator import (
     evaluate_interview_answer,
 )
+from app.services.interview.evaluation_validator import validate_interview_evaluation
 from app.services.interview.next_question_resolver import resolve_next_interview_step
 from app.services.interview.rag_service import retrieve_interview_evidence
 from app.services.interview.stt_service import evaluate_stt_fallback
@@ -92,6 +93,32 @@ async def interview_answer_service(
         position_name=position_name,
         retrieved_evidence=retrieved_evidence,
     )
+    evaluation_validation = validate_interview_evaluation(
+        evaluation=evaluation,
+        question_text=current_question_text,
+        answer_text=answer_full_text,
+        jd_text=jd_text,
+        retrieved_evidence=retrieved_evidence,
+        retry_count=0,
+    )
+    if not evaluation_validation.valid:
+        evaluation = evaluate_interview_answer(
+            question_type=current_question_type,
+            question_text=current_question_text,
+            answer_text=answer_full_text,
+            jd_text=jd_text,
+            position_name=position_name,
+            retrieved_evidence=retrieved_evidence,
+            validation_feedback=evaluation_validation.retryInstruction,
+        )
+        evaluation_validation = validate_interview_evaluation(
+            evaluation=evaluation,
+            question_text=current_question_text,
+            answer_text=answer_full_text,
+            jd_text=jd_text,
+            retrieved_evidence=retrieved_evidence,
+            retry_count=1,
+        )
     vision_result = evaluate_vision_metrics(payload)
     nonverbal_summary_text = str(vision_result["summary"])
     nonverbal_score = int(vision_result["score"])
@@ -138,6 +165,7 @@ async def interview_answer_service(
             "nonverbalSummaryText": nonverbal_summary_text,
             # 2026-05-07 신규: 최종 리포트와 발표 방어용으로 턴별 RAG 평가 근거를 저장
             "retrievedEvidence": retrieved_evidence,
+            "evaluationValidation": evaluation_validation.model_dump(),
         },
     )
     await redis_interview_state_store.save_stt_retry_count(
@@ -157,6 +185,7 @@ async def interview_answer_service(
         nonverbalScore=nonverbal_score,
         # 2026.04.25 신규: 13단계 최종 리포트 계산을 위해 턴별 점수를 내부 응답에 포함
         totalScore=hidden_total_score,
+        evaluationValidation=evaluation_validation,
         decision=decision,
         tempArtifacts=TempArtifacts(
             rawTranscriptKey="temp/raw-transcript/dummy-turn-1.json",

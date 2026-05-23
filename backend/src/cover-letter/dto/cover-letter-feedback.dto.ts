@@ -159,6 +159,18 @@ export class CoverLetterFeedbackResponseDto {
   @ApiProperty({ description: '점수 신뢰도', example: 0.82 })
   confidence!: number;
 
+  @ApiPropertyOptional({
+    description: '평가 validator 검증 요약',
+    type: Object,
+  })
+  evaluationValidation?: {
+    valid: boolean;
+    confidence: number;
+    reasons: string[];
+    retryInstruction?: string;
+    retryCount: number;
+  } | null;
+
   @ApiProperty({ description: 'JD 원문 검증을 통과한 키워드', type: [String] })
   @IsArray()
   verifiedJdKeywords!: string[];

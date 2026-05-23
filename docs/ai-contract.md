@@ -14,6 +14,8 @@
 - NestJS만 FastAPI 내부 API를 호출한다.
 - FastAPI 내부 API는 `x-internal-shared-secret` 헤더로 보호한다.
 - AI 결과는 구조화 JSON으로 받고 서버 검증 후 저장한다.
+- 평가 결과는 `evaluator -> evaluation_validator -> 서버 하네스`를 통과하기 전까지 final로 취급하지 않는다.
+- validator 실패 시 재평가는 기본 1회만 허용하고, 재평가 후에도 실패하면 보수 점수 또는 fallback 결과를 사용한다.
 
 ## 3. 핵심 저장 원칙
 
@@ -24,6 +26,8 @@
 - 허용 보정은 띄어쓰기, 문장부호, 명백한 STT 깨짐 수정 정도로 제한한다.
 - raw transcript, raw vision metrics, hidden score, 세션 중간 상태, 실패 세션 임시 데이터는 세션 종료 후 10분 내 삭제한다.
 - raw video와 raw frame image는 장기 저장하지 않는다.
+- 평가 validator raw response와 재평가 중간 결과는 장기 저장하지 않는다.
+- 장기 저장 가능한 것은 사용자에게 보여줄 최종 리포트, 검증된 근거 요약, 턴별 질문/답변/피드백이다.
 
 ## 4. 공개 API
 
@@ -85,12 +89,21 @@ Response:
 {
   "reportId": "clr-001",
   "totalScore": 84,
+  "confidence": 0.88,
+  "evaluationValidation": {
+    "valid": true,
+    "confidence": 0.82,
+    "reasons": [],
+    "retryCount": 0
+  },
   "summary": "JD와의 연결은 좋지만 성과 근거가 더 필요합니다.",
   "strengths": ["직무 키워드 반영이 좋습니다.", "지원 동기가 명확합니다.", "문장 흐름이 안정적입니다."],
   "weaknesses": ["본인 역할 설명이 약합니다.", "성과 수치가 부족합니다.", "프로젝트 근거가 추상적입니다."],
   "revisionDirections": ["프로젝트별 역할을 분리하세요.", "성과를 수치로 적으세요.", "직무 연결 문장을 보강하세요."]
 }
 ```
+
+`evaluationValidation`은 evaluator 결과가 근거성과 점수 일관성 검증을 통과했는지 나타내는 내부 검증 요약이다. 사용자 화면 노출은 선택 사항이며, raw validator response는 장기 저장하지 않는다.
 
 ### 4-3. 자소서 리포트 목록 조회
 
@@ -195,11 +208,19 @@ Response:
     "answerFullText": "안녕하세요. 백엔드 직무에 지원한 홍길동입니다.",
     "feedbackText": "본인 역할과 성과 근거를 더 구체화하면 좋습니다.",
     "nonverbalSummaryText": "얼굴 유지율은 안정적이었고 큰 장해 요소는 없었습니다.",
-    "inputMode": "VIDEO"
+    "inputMode": "VIDEO",
+    "evaluationValidation": {
+      "valid": true,
+      "confidence": 0.79,
+      "reasons": [],
+      "retryCount": 0
+    }
   },
   "finalResult": null
 }
 ```
+
+면접 답변의 `evaluationValidation`은 `answer_full_text` 기준 평가가 실제 답변 근거와 맞는지 검증한 요약이다. retrievedEvidence는 맥락 참고용이며, 답변에 없는 내용을 점수 근거로 쓰면 validator에서 실패 처리한다.
 
 ### 4-7. 면접 세션 종료
 
@@ -307,6 +328,32 @@ Response:
 
 내부 API는 공개 API와 같은 정책을 따르되, FastAPI 내부 처리에 필요한 `answerVideoStorageKey`, raw transcript 참조값, raw vision metrics 참조값을 사용할 수 있다. 이 값들은 영구 저장 대상이 아니다.
 
+내부 평가 처리 공통 순서:
+
+```text
+평가 입력 정규화
+-> evaluator agent 실행
+-> evaluation_validator agent 실행
+-> valid=true이면 서버 하네스 검증
+-> valid=false이면 실패 이유를 evaluator에 전달해 1회 재평가
+-> 재평가 후에도 실패하면 보수 점수 또는 fallback 결과 사용
+-> 최종 결과만 NestJS로 반환
+```
+
+validator 공통 출력:
+
+```json
+{
+  "valid": false,
+  "confidence": 0.62,
+  "reasons": ["근거 문장이 입력 문서에서 확인되지 않습니다."],
+  "retryInstruction": "확인 가능한 근거만 사용해 점수를 보수적으로 다시 산정하세요.",
+  "retryCount": 0
+}
+```
+
+재평가는 기본 1회로 제한한다. validator는 최종 점수를 직접 생성하는 주체가 아니라, evaluator 결과가 다음 단계로 넘어갈 수 있는지 검사하는 하네스 hook이다.
+
 ## 6. 상태값
 
 ### 6-1. InterviewSessionStatus
@@ -338,6 +385,8 @@ Response:
 - `TEMP_CLEANUP_PENDING`
 - `INTERNAL_AI_UNAVAILABLE`
 - `INTERNAL_AUTH_INVALID`
+- `AI_EVALUATION_VALIDATION_FAILED`
+- `AI_EVALUATION_RETRY_EXHAUSTED`
 - `INVALID_REQUEST`
 
 ## 8. 저장 정책 요약

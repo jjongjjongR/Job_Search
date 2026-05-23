@@ -35,9 +35,11 @@ Agent는 자율적으로 모든 판단을 대신하는 모델이 아니다. 이 
 3. `document_vision`
 4. `evidence_extractor`
 5. `cover_letter_evaluator`
-6. `draft_generator`
-7. `draft_reviewer`
-8. `END`
+6. `evaluation_validator`
+7. `evaluation_retry_router`
+8. `draft_generator`
+9. `draft_reviewer`
+10. `END`
 
 현재 기준 흐름:
 
@@ -50,6 +52,8 @@ Agent는 자율적으로 모든 판단을 대신하는 모델이 아니다. 이 
 -> rag_retriever
 -> evidence_extractor
 -> cover_letter_evaluator
+-> evaluation_validator
+-> 검증 실패 시 cover_letter_evaluator 1회 재실행
 -> draft_generator
 -> draft_reviewer
 -> 서버 검증
@@ -87,15 +91,48 @@ Agent는 자율적으로 모든 판단을 대신하는 모델이 아니다. 이 
 - JD 기준으로 자소서를 평가한다.
 - totalScore, summary, strengths, weaknesses, revisionDirections를 구조화 JSON으로 만든다.
 - LLM 결과는 서버 검증 전까지 final로 보지 않는다.
+- 평가 결과는 바로 다음 단계로 넘기지 않고 `evaluation_validator`를 통과해야 한다.
+
+### 4-6. `evaluation_validator`
+
+- `cover_letter_evaluator`가 만든 평가 결과의 근거성, 점수 일관성, 과장 여부를 검증한다.
+- 별도 LLM validator agent를 사용할 수 있으며, validator도 구조화 JSON으로만 응답한다.
+- 검증 기준:
+  - `evidenceText`가 RAG 근거 또는 입력 문서와 실제로 연결되는가
+  - 점수가 근거에 비해 과하게 높거나 낮지 않은가
+  - 강점/약점/수정 방향이 서로 모순되지 않는가
+  - JD 핵심 요구와 평가 항목이 연결되어 있는가
+  - 입력 문서에 없는 경험을 평가 근거처럼 사용하지 않았는가
+  - rubric 합계와 totalScore가 일관적인가
+- validator가 `valid=false`를 반환하면 실패 이유와 재평가 지시문을 만든다.
+
+`EvaluationValidationResult`:
+
+```ts
+{
+  valid: boolean;
+  confidence: number;
+  reasons: string[];
+  retryInstruction: string;
+}
+```
+
+### 4-7. `evaluation_retry_router`
+
+- `evaluation_validator` 결과를 보고 다음 흐름을 결정한다.
+- `valid=true`이면 `draft_generator`로 진행한다.
+- `valid=false`이면 validator의 `retryInstruction`을 `cover_letter_evaluator`에 전달해 1회만 재평가한다.
+- 재평가 후에도 실패하면 무한 반복하지 않고 서버 하네스가 보수 점수 또는 fallback 평가를 선택한다.
+- 재평가 횟수는 기본 `1회`로 제한한다.
 
 자료/요구사항 기준상 자소서 AI는 독립적인 자기소개서 생성 기능이 아니라 피드백/평가 기능이다. Draft 계열 Agent는 최종 제출본을 생성하지 않고, 사용자가 개선 방향을 이해하기 위한 수정 방향 예시만 만든다.
 
-### 4-6. `draft_generator`
+### 4-8. `draft_generator`
 
 - 피드백을 바탕으로 수정 방향 예시를 만든다.
 - 사용자가 쓰지 않은 경험을 새로 지어내면 안 된다.
 
-### 4-7. `draft_reviewer`
+### 4-9. `draft_reviewer`
 
 - 수정 방향 예시가 JD와 근거에 맞는지 다시 검토한다.
 - 과장 표현, 근거 없는 성과, 새 경험 생성 여부를 점검한다.
@@ -135,12 +172,14 @@ VLM 중간 산출물은 장기 저장하지 않는다.
 2. `question_planner`
 3. `answer_stt`
 4. `answer_evaluator`
-5. `vision_analyzer`
-6. `followup_resolver`
-7. `next_question_resolver`
-8. `report_generator`
-9. `cleanup_scheduler`
-10. `END`
+5. `answer_evaluation_validator`
+6. `answer_evaluation_retry_router`
+7. `vision_analyzer`
+8. `followup_resolver`
+9. `next_question_resolver`
+10. `report_generator`
+11. `cleanup_scheduler`
+12. `END`
 
 ## 7. 면접 Agent 흐름
 
@@ -153,6 +192,8 @@ VLM 중간 산출물은 장기 저장하지 않는다.
 -> STT
 -> answer_full_text 생성
 -> LLM 내용 평가
+-> 평가 검증
+-> 검증 실패 시 LLM 내용 평가 1회 재실행
 -> Vision 비언어 보조 지표 분석
 -> follow-up 또는 다음 질문 결정
 -> 5문항 이상이면 최종 리포트 생성
@@ -205,8 +246,31 @@ VLM 중간 산출물은 장기 저장하지 않는다.
 - 내용 평가는 85점 기준이다.
 - 평가 기준은 질문 적합성, 구체성, 근거/성과, 직무 적합성, 논리성/구조, 진정성/태도다.
 - 충분 답변 여부와 부족 이유를 구조화 JSON으로 반환한다.
+- 평가 결과는 바로 follow-up/next decision에 쓰지 않고 `answer_evaluation_validator`를 통과해야 한다.
 
-### 8-5. `vision_analyzer`
+### 8-5. `answer_evaluation_validator`
+
+- `answer_evaluator`가 만든 점수와 충분성 판단이 실제 `answer_full_text`에 근거하는지 검증한다.
+- 별도 LLM validator agent를 사용할 수 있으며, validator도 구조화 JSON으로만 응답한다.
+- 검증 기준:
+  - 점수 근거가 `answer_full_text`에 실제로 있는가
+  - 답변에 없는 역할, 성과, 기술, 프로젝트를 근거로 삼지 않았는가
+  - retrievedEvidence를 답변 내용처럼 착각하지 않았는가
+  - 충분 답변 판단이 점수 기준과 일치하는가
+  - `followUpFocus`가 부족 사유와 맞는가
+  - 꼬리질문이 필요한 답변을 충분 답변으로 잘못 처리하지 않았는가
+- validator가 `valid=false`를 반환하면 실패 이유와 재평가 지시문을 만든다.
+- 면접 평가에서 retrievedEvidence는 맥락 참고용이며, 답변에 없는 내용을 점수 근거로 쓰면 실패 처리한다.
+
+### 8-6. `answer_evaluation_retry_router`
+
+- `answer_evaluation_validator` 결과를 보고 다음 흐름을 결정한다.
+- `valid=true`이면 Vision 분석과 다음 질문 결정으로 진행한다.
+- `valid=false`이면 validator의 `retryInstruction`을 `answer_evaluator`에 전달해 1회만 재평가한다.
+- 재평가 후에도 실패하면 서버 하네스가 보수적인 heuristic 평가 또는 fallback decision을 선택한다.
+- 재평가 횟수는 기본 `1회`로 제한한다.
+
+### 8-7. `vision_analyzer`
 
 - Vision은 비언어 보조 지표만 계산한다.
 - 감정 분석, 성격 추정, 인성 판단은 하지 않는다.
@@ -233,7 +297,7 @@ Vision provider는 교체 가능해야 한다.
 
 외부 서비스는 provider 이름이 아니라 `VisionMetrics`만 본다.
 
-### 8-6. `followup_resolver`
+### 8-8. `followup_resolver`
 
 - 답변이 부족하면 꼬리질문을 만든다.
 - 질문당 꼬리질문은 최대 2개다.
@@ -250,13 +314,13 @@ Vision provider는 교체 가능해야 한다.
 4. 전문성 디테일
 5. 협업/태도
 
-### 8-7. `next_question_resolver`
+### 8-9. `next_question_resolver`
 
 - 충분 답변이면 다음 기본 질문으로 이동한다.
 - 꼬리질문 제한에 도달하면 다음 기본 질문으로 이동한다.
 - 세션 상태의 현재 질문 번호, 현재 질문 타입, follow-up count를 갱신한다.
 
-### 8-8. `report_generator`
+### 8-10. `report_generator`
 
 - 5문항 이상 진행 시 최종 리포트를 생성한다.
 - 5문항 미만이면 리포트를 생성하지 않는다.
@@ -276,7 +340,7 @@ Vision provider는 교체 가능해야 한다.
 - 질문 목록-답변
 - 턴별 피드백
 
-### 8-9. `cleanup_scheduler`
+### 8-11. `cleanup_scheduler`
 
 - 세션 종료 후 cleanup deadline을 기록한다.
 - raw transcript, raw vision metrics, hidden score, 세션 중간 상태, 실패 세션 임시 분석 데이터, 임시 업로드 답변 영상을 10분 내 삭제 대상으로 둔다.
@@ -289,6 +353,9 @@ Vision provider는 교체 가능해야 한다.
 - 각 노드는 표준 입력/출력만 주고받는다.
 - LLM/VLM/Vision provider는 인터페이스 뒤에 숨긴다.
 - 평가와 생성 결과는 서버 규칙이 검증한 뒤 채택한다.
+- 평가 결과는 validator agent와 서버 하네스를 통과하기 전까지 final로 취급하지 않는다.
+- validator 실패 시 재평가는 1회만 허용하고, 무한 루프를 만들지 않는다.
+- validator는 재채점자가 아니라 검사관이다. 점수를 새로 만드는 것보다 근거성, 일관성, 과장 여부, 다음 decision 적합성을 검증한다.
 - raw 응답과 중간값은 영구 저장하지 않는다.
 - 발표에서는 autonomous agent보다 명시적 상태 그래프라고 설명한다.
 
