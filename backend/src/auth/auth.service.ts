@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   UnauthorizedException,
@@ -28,6 +29,19 @@ export class AuthService {
   ) {}
 
   async signup(signupDto: SignupDto) {
+    const existingUser = await this.usersService.findByEmail(signupDto.email);
+
+    if (existingUser) {
+      if (existingUser.isEmailVerified) {
+        throw new ConflictException('이미 사용 중인 이메일입니다.');
+      }
+
+      await this.sendVerificationEmail(existingUser);
+      return this.usersService.toResponse(existingUser);
+    }
+
+    this.mailService.assertEmailVerificationReady();
+
     const passwordHash = await bcrypt.hash(signupDto.password, 10);
     const user = await this.usersService.createUser({
       email: signupDto.email,
@@ -36,7 +50,12 @@ export class AuthService {
       passwordHash,
     });
 
-    await this.sendVerificationEmail(user);
+    try {
+      await this.sendVerificationEmail(user);
+    } catch (error) {
+      await this.usersService.deleteById(user.id);
+      throw error;
+    }
 
     return this.usersService.toResponse(user);
   }
