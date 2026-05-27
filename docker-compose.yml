@@ -72,6 +72,12 @@ services:
       JWT_EXPIRES_IN: 1h
       AI_INTERNAL_BASE_URL: http://ai:8000
       AI_INTERNAL_SHARED_SECRET: local-internal-secret
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      MAIL_FROM: ${MAIL_FROM:-}
       OPENAI_API_KEY: ""
       STORAGE_PROVIDER: local
       BACKEND_STORAGE_ROOT: /app/storage
