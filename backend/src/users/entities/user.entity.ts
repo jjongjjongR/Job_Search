@@ -30,7 +30,11 @@ export class User {
   @Column({ name: 'email_verified_at', type: 'timestamp', nullable: true })
   emailVerifiedAt: Date | null;
 
-  @Column({ name: 'email_verification_token_hash', nullable: true })
+  @Column({
+    name: 'email_verification_token_hash',
+    type: 'varchar',
+    nullable: true,
+  })
   emailVerificationTokenHash: string | null;
 
   @Column({
