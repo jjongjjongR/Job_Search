@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import {
@@ -40,23 +41,33 @@ export function SiteHeader() {
   }
 
   return (
-    <header className="relative mb-4 overflow-hidden rounded-[36px] border border-[var(--border-soft)] bg-[var(--page-panel)] px-6 py-5 shadow-[0_20px_60px_rgba(16,36,61,0.08)] backdrop-blur">
+    <header className="relative mb-4 overflow-hidden rounded-[8px] border border-[var(--border-soft)] bg-[var(--page-panel)] px-5 py-4 shadow-[0_18px_48px_rgba(16,36,61,0.07)] backdrop-blur">
       <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[var(--accent)]/45 to-transparent" />
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex items-start gap-4">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--card-strong)] text-lg font-bold text-white shadow-[0_10px_24px_rgba(16,36,61,0.2)]">
-            W
-          </div>
+          <Link
+            href="/"
+            aria-label="메인 페이지로 이동"
+            className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-[8px] bg-white shadow-[0_10px_24px_rgba(16,36,61,0.12)]"
+          >
+            <Image
+              src="/world_JobSearch_logo.png"
+              alt="World Job Search"
+              width={56}
+              height={56}
+              priority
+              className="h-full w-full object-cover"
+            />
+          </Link>
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[var(--accent)]">
               World Job Search
             </p>
             <Link href="/" className="mt-1 block text-2xl font-bold tracking-tight sm:text-3xl">
-              취업 준비를 위한 통합 포털
+              온세상이취업
             </Link>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--text-muted)]">
-              로그인, 게시판, 자료실, AI 준비 기능을 한 흐름으로 묶은 서비스형 화면으로
-              정리했습니다.
+              채용 정보 정리부터 자기소개서와 면접 준비까지 한 곳에서 이어지는 취업 준비 서비스입니다.
             </p>
           </div>
         </div>
@@ -68,13 +79,13 @@ export function SiteHeader() {
                 {user.displayName} 님
               </span>
               <Link
-                className="rounded-full border border-[var(--border-soft)] bg-white px-4 py-2 font-semibold"
+                className="rounded-[8px] border border-[var(--border-soft)] bg-white px-4 py-2 font-semibold"
                 href="/mypage"
               >
                 마이페이지
               </Link>
               <button
-                className="rounded-full bg-[var(--card-strong)] px-4 py-2 font-semibold text-white shadow-[0_10px_24px_rgba(16,36,61,0.18)]"
+                className="rounded-[8px] bg-[var(--card-strong)] px-4 py-2 font-semibold text-white shadow-[0_10px_24px_rgba(16,36,61,0.18)]"
                 onClick={handleLogout}
               >
                 로그아웃
@@ -82,10 +93,10 @@ export function SiteHeader() {
             </>
           ) : (
             <>
-              <Link className="rounded-full border border-[var(--border-soft)] bg-white px-4 py-2 font-semibold" href="/login">
+              <Link className="rounded-[8px] border border-[var(--border-soft)] bg-white px-4 py-2 font-semibold" href="/login">
                 로그인
               </Link>
-              <Link className="rounded-full bg-[var(--accent)] px-4 py-2 font-semibold text-white shadow-[0_10px_24px_rgba(30,111,217,0.28)]" href="/signup">
+              <Link className="rounded-[8px] bg-[var(--accent)] px-4 py-2 font-semibold text-white shadow-[0_10px_24px_rgba(30,111,217,0.28)]" href="/signup">
                 회원가입
               </Link>
             </>

@@ -64,7 +64,8 @@ export default function PostDetailPage() {
     }
 
     await apiRequest(`/posts/${postId}`, { method: 'DELETE' });
-    router.push('/board');
+    router.replace('/board');
+    router.refresh();
   };
 
   const handleCreateComment = async () => {

@@ -78,7 +78,8 @@ export default function DataroomDetailPage() {
     }
 
     await apiRequest(`/dataroom/${itemId}`, { method: 'DELETE' });
-    router.push('/dataroom');
+    router.replace('/dataroom');
+    router.refresh();
   };
 
   const handleDownload = async () => {

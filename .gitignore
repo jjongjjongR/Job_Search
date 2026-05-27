@@ -27,6 +27,7 @@ frontend/.next_backup_*/
 *.pptx
 *.xlsx
 *.png
+!frontend/public/world_JobSearch_logo.png
 ERD.png
 project.txt
 project_v7.txt

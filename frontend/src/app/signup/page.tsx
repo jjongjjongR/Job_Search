@@ -1,7 +1,6 @@
 'use client';
 
 import Link from 'next/link';
-import { signIn } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
@@ -60,16 +59,16 @@ export default function SignupPage() {
               error={errors.email?.message}
             />
             <FormField
-              label="username"
+              label="아이디"
               name="username"
-              placeholder="jongheon"
+              placeholder="영문과 숫자로 입력"
               register={register}
               error={errors.username?.message}
             />
             <FormField
-              label="displayName"
+              label="이름"
               name="displayName"
-              placeholder="이종헌"
+              placeholder="서비스에 표시할 이름"
               register={register}
               error={errors.displayName?.message}
             />
@@ -107,19 +106,22 @@ export default function SignupPage() {
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               <button
                 type="button"
-                onClick={() => signIn('kakao', { callbackUrl: '/social/callback' })}
-                className="rounded-2xl bg-[#FEE500] px-4 py-3 text-center font-semibold text-[#191600]"
+                disabled
+                className="rounded-2xl border border-yellow-200 bg-yellow-50 px-4 py-3 text-center font-semibold text-yellow-900 opacity-70"
               >
-                Kakao로 시작하기
+                Kakao 준비중
               </button>
               <button
                 type="button"
-                onClick={() => signIn('naver', { callbackUrl: '/social/callback' })}
-                className="rounded-2xl bg-[#03C75A] px-4 py-3 text-center font-semibold text-white"
+                disabled
+                className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-center font-semibold text-emerald-900 opacity-70"
               >
-                Naver로 시작하기
+                Naver 준비중
               </button>
             </div>
+            <p className="mt-3 text-xs leading-5 text-[var(--text-muted)]">
+              소셜 가입은 배포 환경 연동 준비 중입니다. 현재는 이메일 가입을 이용해 주세요.
+            </p>
           </div>
         </div>
 
@@ -128,8 +130,8 @@ export default function SignupPage() {
           <ul className="mt-4 space-y-3 text-sm leading-6 text-[var(--text-muted)]">
             <li>게시판 글 작성과 댓글 참여</li>
             <li>자료실 목록 확인과 파일 다운로드</li>
-            <li>보호 API 기반 내 정보 조회</li>
-            <li>추후 AI 자소서와 AI 면접 기능 연동</li>
+            <li>마이페이지에서 내 활동 확인</li>
+            <li>AI 자소서와 AI 면접 준비</li>
           </ul>
         </div>
       </div>

@@ -150,8 +150,8 @@ export default function MyPage() {
   return (
     <FeatureShell
       eyebrow="My Page"
-      title="내 계정과 저장된 AI 리포트"
-      description="현재 로그인한 사용자의 기본 정보를 확인하고, 저장된 자소서 리포트와 수정 초안을 마이페이지에서 다시 볼 수 있습니다."
+      title="마이페이지"
+      description="내 활동과 저장된 자소서 리포트, 수정 초안을 한 곳에서 다시 확인할 수 있습니다."
     >
       {user ? (
         <div className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
@@ -160,7 +160,7 @@ export default function MyPage() {
               <div className="space-y-4 rounded-[28px] bg-[var(--card-soft)] p-6">
                 <InfoRow label="이름" value={user.displayName} />
                 <InfoRow label="이메일" value={user.email} />
-                <InfoRow label="username" value={user.username} />
+                <InfoRow label="아이디" value={user.username} />
                 <InfoRow label="권한" value={user.role} />
               </div>
 

@@ -4,8 +4,8 @@ import { SiteHeader } from '@/components/site-header';
 import { SiteNavigation } from '@/components/site-navigation';
 
 export const metadata: Metadata = {
-  title: 'World Job Search',
-  description: 'JWT 인증 뼈대가 적용된 취업 준비 서비스',
+  title: '온세상이취업 | World Job Search',
+  description: '취업 준비를 한 곳에서 이어가는 World Job Search 서비스',
 };
 
 export default function RootLayout({

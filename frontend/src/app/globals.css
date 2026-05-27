@@ -1,15 +1,15 @@
 @import "tailwindcss";
 
 :root {
-  --page-bg: #f3f6fb;
-  --page-panel: rgba(255, 255, 255, 0.82);
-  --text-main: #112033;
-  --text-muted: #5d6c80;
-  --accent: #1e6fd9;
-  --accent-dark: #164d95;
-  --card-soft: #f8fbff;
-  --card-strong: #10243d;
-  --border-soft: #d7e2ef;
+  --page-bg: #f6f7f9;
+  --page-panel: rgba(255, 255, 255, 0.92);
+  --text-main: #17202a;
+  --text-muted: #66717f;
+  --accent: #246bca;
+  --accent-dark: #174a8f;
+  --card-soft: #f4f7fb;
+  --card-strong: #202a37;
+  --border-soft: #dde4ec;
   --success-soft: #edf8f2;
   --warning-soft: #fff6e8;
 }
@@ -27,10 +27,7 @@ body {
   font-family:
     "Pretendard", "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic",
     sans-serif;
-  background:
-    radial-gradient(circle at top left, rgba(30, 111, 217, 0.18), transparent 26%),
-    radial-gradient(circle at top right, rgba(17, 32, 51, 0.08), transparent 24%),
-    linear-gradient(180deg, #f7f9fd 0%, #f1f5fb 100%);
+  background: linear-gradient(180deg, #f9fafb 0%, #eef2f7 100%);
 }
 
 a {
@@ -40,6 +37,10 @@ a {
 
 button {
   cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
 }
 
 input {

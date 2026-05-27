@@ -1,7 +1,6 @@
 'use client';
 
 import Link from 'next/link';
-import { signIn } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
@@ -39,7 +38,7 @@ export default function LoginPage() {
       });
 
       saveAuth(result);
-      router.push('/me');
+      router.push('/');
     } catch (error) {
       setSubmitError(
         error instanceof ApiError ? error.message : '로그인에 실패했습니다.',
@@ -51,7 +50,7 @@ export default function LoginPage() {
     <FeatureShell
       eyebrow="Login"
       title="회원 로그인"
-      description="로그인 후에만 게시판 본문, 댓글, 자료실 문서 내용을 볼 수 있도록 실제 사이트 흐름에 맞춰 보호했습니다."
+      description="로그인하면 게시판, 자료실, AI 준비 기능을 바로 이용할 수 있습니다."
     >
       <div className="grid gap-6 lg:grid-cols-[1.05fr_0.75fr]">
         <div className="rounded-[28px] bg-white p-8 shadow-[0_18px_50px_rgba(16,36,61,0.07)]">
@@ -110,19 +109,22 @@ export default function LoginPage() {
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               <button
                 type="button"
-                onClick={() => signIn('kakao', { callbackUrl: '/social/callback' })}
-                className="rounded-2xl bg-[#FEE500] px-4 py-3 text-center font-semibold text-[#191600]"
+                disabled
+                className="rounded-2xl border border-yellow-200 bg-yellow-50 px-4 py-3 text-center font-semibold text-yellow-900 opacity-70"
               >
-                Kakao 로그인
+                Kakao 준비중
               </button>
               <button
                 type="button"
-                onClick={() => signIn('naver', { callbackUrl: '/social/callback' })}
-                className="rounded-2xl bg-[#03C75A] px-4 py-3 text-center font-semibold text-white"
+                disabled
+                className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-center font-semibold text-emerald-900 opacity-70"
               >
-                Naver 로그인
+                Naver 준비중
               </button>
             </div>
+            <p className="mt-3 text-xs leading-5 text-[var(--text-muted)]">
+              소셜 로그인은 배포 환경 연동 준비 중입니다. 현재는 이메일 로그인을 이용해 주세요.
+            </p>
           </div>
         </div>
 
@@ -131,8 +133,8 @@ export default function LoginPage() {
           <ul className="mt-4 space-y-3 text-sm leading-6 text-white/78">
             <li>게시판 글 목록과 본문, 댓글</li>
             <li>자료실 목록, 상세 정보, 파일 다운로드</li>
-            <li>내 정보 및 마이페이지</li>
-            <li>JWT 보호 API 기반 사용자 흐름</li>
+            <li>마이페이지의 내 활동과 저장 리포트</li>
+            <li>AI 자기소개서와 면접 준비 기능</li>
           </ul>
         </div>
       </div>

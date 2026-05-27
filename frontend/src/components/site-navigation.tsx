@@ -9,8 +9,6 @@ const links = [
   { href: '/', label: '홈' },
   { href: '/board', label: '게시판' },
   { href: '/dataroom', label: '자료실' },
-  { href: '/mypage', label: '내 계정' },
-  { href: '/me', label: '내 정보' },
   { href: '/ai_cover_letter', label: 'AI 자소서' },
   { href: '/ai_interview', label: 'AI 면접' },
 ];

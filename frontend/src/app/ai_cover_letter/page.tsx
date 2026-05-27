@@ -576,13 +576,12 @@ export default function AICoverLetterPage() {
 
             <div className="rounded-[28px] border border-[var(--border-soft)] bg-white p-6">
               <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--accent)]">
-                흐름 요약
+                이용 안내
               </p>
               <ul className="mt-4 space-y-3 text-sm leading-6 text-[var(--text-muted)]">
-                <li>프론트는 NestJS 공개 API만 호출합니다.</li>
-                <li>공고 분석 결과는 `jobAnalysisRequestId`로 저장됩니다.</li>
-                <li>자소서 피드백은 텍스트 입력과 파일 업로드 둘 다 지원합니다.</li>
-                <li>생성된 리포트 목록과 상세 조회는 마이페이지에서 확인할 수 있습니다.</li>
+                <li>채용 공고를 먼저 분석하면 자기소개서 평가가 더 정확해집니다.</li>
+                <li>자기소개서는 직접 입력하거나 파일로 올릴 수 있습니다.</li>
+                <li>생성된 결과는 마이페이지에서 다시 확인할 수 있습니다.</li>
               </ul>
             </div>
           </div>
