@@ -24,6 +24,22 @@ export class User {
   @Column({ name: 'password_hash' })
   passwordHash: string;
 
+  @Column({ name: 'is_email_verified', default: false })
+  isEmailVerified: boolean;
+
+  @Column({ name: 'email_verified_at', type: 'timestamp', nullable: true })
+  emailVerifiedAt: Date | null;
+
+  @Column({ name: 'email_verification_token_hash', nullable: true })
+  emailVerificationTokenHash: string | null;
+
+  @Column({
+    name: 'email_verification_expires_at',
+    type: 'timestamp',
+    nullable: true,
+  })
+  emailVerificationExpiresAt: Date | null;
+
   @Column({
     type: 'varchar',
     default: UserRole.USER,

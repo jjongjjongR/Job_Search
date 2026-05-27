@@ -9,6 +9,7 @@ export interface CreateUserParams {
   username: string;
   displayName: string;
   passwordHash: string;
+  isEmailVerified?: boolean;
   role?: UserRole;
 }
 
@@ -38,6 +39,8 @@ export class UsersService {
 
     const user = this.usersRepository.create({
       ...params,
+      isEmailVerified: params.isEmailVerified ?? false,
+      emailVerifiedAt: params.isEmailVerified ? new Date() : null,
       role: params.role ?? UserRole.USER,
     });
 
@@ -80,6 +83,38 @@ export class UsersService {
     return user;
   }
 
+  async saveEmailVerificationToken(
+    userId: string,
+    tokenHash: string,
+    expiresAt: Date,
+  ): Promise<void> {
+    await this.usersRepository.update(userId, {
+      emailVerificationTokenHash: tokenHash,
+      emailVerificationExpiresAt: expiresAt,
+    });
+  }
+
+  async verifyEmailByTokenHash(tokenHash: string): Promise<User | null> {
+    const user = await this.usersRepository.findOne({
+      where: { emailVerificationTokenHash: tokenHash },
+    });
+
+    if (!user || !user.emailVerificationExpiresAt) {
+      return null;
+    }
+
+    if (user.emailVerificationExpiresAt.getTime() < Date.now()) {
+      return null;
+    }
+
+    user.isEmailVerified = true;
+    user.emailVerifiedAt = new Date();
+    user.emailVerificationTokenHash = null;
+    user.emailVerificationExpiresAt = null;
+
+    return this.usersRepository.save(user);
+  }
+
   toResponse(user: User) {
     return {
       id: user.id,
@@ -87,6 +122,7 @@ export class UsersService {
       username: user.username,
       displayName: user.displayName,
       role: user.role,
+      isEmailVerified: user.isEmailVerified,
     };
   }
 }

@@ -16,4 +16,7 @@ export class UserResponseDto {
 
   @ApiProperty({ enum: UserRole })
   role: UserRole;
+
+  @ApiProperty()
+  isEmailVerified: boolean;
 }

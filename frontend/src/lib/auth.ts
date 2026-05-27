@@ -4,6 +4,7 @@ export interface AuthUser {
   username: string;
   displayName: string;
   role: string;
+  isEmailVerified?: boolean;
 }
 
 export interface LoginResponse {
@@ -71,6 +72,7 @@ export function getStoredUser(): AuthUser | null {
       username?: string;
       displayName?: string;
       role?: string;
+      isEmailVerified?: boolean;
     };
 
     // 2026-05-16 신규: 토큰에 필수 사용자 정보가 있을 때만 로그인 사용자로 인정
@@ -90,6 +92,7 @@ export function getStoredUser(): AuthUser | null {
       username: decodedPayload.username,
       displayName: decodedPayload.displayName,
       role: decodedPayload.role,
+      isEmailVerified: decodedPayload.isEmailVerified,
     };
   } catch {
     return null;

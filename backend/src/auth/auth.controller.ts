@@ -1,4 +1,4 @@
-import { Body, Controller, Post } from '@nestjs/common';
+import { Body, Controller, Get, Post, Query } from '@nestjs/common';
 import {
   ApiConflictResponse,
   ApiOkResponse,
@@ -9,6 +9,7 @@ import { UserResponseDto } from '../users/dto/user-response.dto';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { LoginResponseDto } from './dto/login-response.dto';
+import { ResendVerificationDto } from './dto/resend-verification.dto';
 import { SignupDto } from './dto/signup.dto';
 import { SocialLoginDto } from './dto/social-login.dto';
 
@@ -29,6 +30,18 @@ export class AuthController {
   @ApiUnauthorizedResponse({ description: '로그인 실패' })
   login(@Body() loginDto: LoginDto): Promise<LoginResponseDto> {
     return this.authService.login(loginDto);
+  }
+
+  @Get('verify-email')
+  @ApiOkResponse({ type: UserResponseDto })
+  verifyEmail(@Query('token') token: string): Promise<UserResponseDto> {
+    return this.authService.verifyEmail(token);
+  }
+
+  @Post('resend-verification')
+  @ApiOkResponse({ description: '인증 메일 재발송' })
+  resendVerification(@Body() resendDto: ResendVerificationDto) {
+    return this.authService.resendVerification(resendDto);
   }
 
   @Post('social-login')

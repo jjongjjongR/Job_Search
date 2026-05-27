@@ -14,10 +14,15 @@ export default function LoginPage() {
   const router = useRouter();
   const [submitError, setSubmitError] = useState('');
   const [registered, setRegistered] = useState(false);
+  const [verifyEmail, setVerifyEmail] = useState(false);
+  const [signupEmail, setSignupEmail] = useState('');
+  const [resendMessage, setResendMessage] = useState('');
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     setRegistered(params.get('registered') === '1');
+    setVerifyEmail(params.get('verifyEmail') === '1');
+    setSignupEmail(params.get('email') ?? '');
   }, []);
 
   const {
@@ -46,6 +51,33 @@ export default function LoginPage() {
     }
   };
 
+  const handleResendVerification = async () => {
+    setSubmitError('');
+    setResendMessage('');
+
+    if (!signupEmail) {
+      setSubmitError('인증 메일을 다시 받을 Gmail 주소를 입력해 주세요.');
+      return;
+    }
+
+    try {
+      const result = await apiRequest<{ message: string }>(
+        '/auth/resend-verification',
+        {
+          method: 'POST',
+          body: JSON.stringify({ email: signupEmail }),
+        },
+      );
+      setResendMessage(result.message);
+    } catch (error) {
+      setSubmitError(
+        error instanceof ApiError
+          ? error.message
+          : '인증 메일을 다시 보내지 못했습니다.',
+      );
+    }
+  };
+
   return (
     <FeatureShell
       eyebrow="Login"
@@ -59,6 +91,31 @@ export default function LoginPage() {
               회원가입이 완료되었습니다. 방금 만든 계정으로 로그인해 주세요.
             </p>
           ) : null}
+          {verifyEmail ? (
+            <div className="mb-5 rounded-2xl border border-blue-100 bg-blue-50 px-4 py-4 text-sm leading-6 text-blue-800">
+              <p className="font-semibold">인증 메일을 보냈습니다.</p>
+              <p className="mt-1">Gmail 받은편지함에서 인증 링크를 누른 뒤 로그인해 주세요.</p>
+              <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                <input
+                  type="email"
+                  value={signupEmail}
+                  onChange={(event) => setSignupEmail(event.target.value)}
+                  placeholder="yourname@gmail.com"
+                  className="min-w-0 flex-1 rounded-xl border border-blue-100 bg-white px-3 py-2 text-[var(--text-main)]"
+                />
+                <button
+                  type="button"
+                  onClick={() => void handleResendVerification()}
+                  className="rounded-xl bg-[var(--accent)] px-4 py-2 font-semibold text-white"
+                >
+                  인증 메일 재발송
+                </button>
+              </div>
+              {resendMessage ? (
+                <p className="mt-2 text-blue-700">{resendMessage}</p>
+              ) : null}
+            </div>
+          ) : null}
 
           <form className="space-y-5" onSubmit={handleSubmit(onSubmit)}>
             <label className="block">
@@ -66,7 +123,7 @@ export default function LoginPage() {
               <input
                 {...register('email')}
                 type="email"
-                placeholder="test@example.com"
+                placeholder="yourname@gmail.com"
                 className="w-full rounded-2xl border border-[var(--border-soft)] bg-[var(--card-soft)] px-4 py-3"
               />
               {errors.email?.message ? (

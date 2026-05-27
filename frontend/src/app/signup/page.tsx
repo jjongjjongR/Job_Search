@@ -32,8 +32,8 @@ export default function SignupPage() {
         body: JSON.stringify(values),
       });
 
-      setSuccessMessage('회원가입이 완료되었습니다. 이제 로그인할 수 있습니다.');
-      router.push('/login?registered=1');
+      setSuccessMessage('인증 메일을 보냈습니다. Gmail 받은편지함을 확인해 주세요.');
+      router.push(`/login?verifyEmail=1&email=${encodeURIComponent(values.email)}`);
     } catch (error) {
       setSubmitError(
         error instanceof ApiError ? error.message : '회원가입에 실패했습니다.',
@@ -45,7 +45,7 @@ export default function SignupPage() {
     <FeatureShell
       eyebrow="Signup"
       title="회원가입"
-      description="가입 후 로그인하면 회원 전용 게시판과 자료실을 사용할 수 있습니다."
+      description="Gmail 주소로 가입한 뒤 이메일 인증을 완료하면 서비스를 이용할 수 있습니다."
     >
       <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
         <div className="rounded-[28px] bg-white p-8 shadow-[0_18px_50px_rgba(16,36,61,0.07)]">
@@ -54,7 +54,7 @@ export default function SignupPage() {
               label="이메일"
               name="email"
               type="email"
-              placeholder="test@example.com"
+              placeholder="yourname@gmail.com"
               register={register}
               error={errors.email?.message}
             />
