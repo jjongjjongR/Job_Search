@@ -200,6 +200,16 @@ def _sum_rubric_total(rubric_scores: list[CoverLetterRubricScore]) -> int:
     return sum(item.score for item in rubric_scores)
 
 
+def _rubric_score_as_percent(
+    rubric_scores: list[CoverLetterRubricScore],
+    category: str,
+) -> int:
+    for item in rubric_scores:
+        if item.category == category and item.maxScore > 0:
+            return round(item.score / item.maxScore * 100)
+    return 0
+
+
 # 2026-04-21 신규: JD와 지원자 근거를 바탕으로 점수와 피드백을 만드는 평가 agent
 def run_cover_letter_evaluator_agent(
     payload: CoverLetterFeedbackRequest,
@@ -232,6 +242,8 @@ def run_cover_letter_evaluator_agent(
             jd_context,
         )
         total_score = max(40, min(_sum_rubric_total(rubric_scores), 89))
+        jd_alignment_score = _rubric_score_as_percent(rubric_scores, "JD 반영도")
+        job_fit_score = _rubric_score_as_percent(rubric_scores, "직무 적합도")
         question_scores = [
             CoverLetterQuestionScore(
                 questionNumber=int(item.get("questionNumber", index + 1)),
@@ -255,10 +267,8 @@ def run_cover_letter_evaluator_agent(
         return {
             "source": "OPENAI",
             "totalScore": total_score,
-            "jdAlignmentScore": max(
-                35, min(int(openai_result.get("jdAlignmentScore", 0)), 95)
-            ),
-            "jobFitScore": max(35, min(int(openai_result.get("jobFitScore", 0)), 95)),
+            "jdAlignmentScore": max(35, min(jd_alignment_score, 95)),
+            "jobFitScore": max(35, min(job_fit_score, 95)),
             "confidence": confidence,
             "verifiedJdKeywords": list(jd_context["jdKeywords"]),
             "rubricScores": rubric_scores,

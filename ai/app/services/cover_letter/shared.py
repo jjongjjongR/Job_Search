@@ -231,7 +231,7 @@ def request_openai_json(system_prompt: str, payload: dict) -> dict | None:
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": json.dumps(payload, ensure_ascii=False)},
         ],
-        "temperature": 0.2,
+        "temperature": 0.0,
     }
 
     try:

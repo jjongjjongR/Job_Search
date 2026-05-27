@@ -9,6 +9,7 @@ from app.services.cover_letter.cover_letter_evaluator_agent import (
     OPENAI_EVALUATOR_PROMPT,
     run_cover_letter_evaluator_agent,
 )
+import app.services.cover_letter.cover_letter_evaluator_agent as cover_letter_evaluator_agent
 from app.services.cover_letter.draft_generator_agent import OPENAI_DRAFT_PROMPT
 from app.services.cover_letter.draft_reviewer_agent import OPENAI_REVIEW_PROMPT
 from app.services.cover_letter.evidence_extractor_agent import (
@@ -113,6 +114,109 @@ def test_cover_letter_evaluation_validator_rejects_overconfident_unverified_scor
 
     assert validation.valid is False
     assert validation.retryInstruction
+
+
+def test_cover_letter_evaluator_derives_top_scores_from_verified_rubric(monkeypatch):
+    monkeypatch.setattr(settings, "OPENAI_API_KEY", None)
+    payload = _cover_letter_payload()
+    jd_context = run_jd_analyzer_agent(payload)
+    rag_context = run_rag_retriever_agent(payload, jd_context)
+    evidence_context = run_evidence_extractor_agent(payload, jd_context, rag_context)
+
+    monkeypatch.setattr(settings, "OPENAI_API_KEY", "test-key")
+    monkeypatch.setattr(
+        cover_letter_evaluator_agent,
+        "request_openai_json",
+        lambda *_args, **_kwargs: {
+            "jdAlignmentScore": 35,
+            "jobFitScore": 95,
+            "totalScore": 45,
+            "summary": "테스트 평가",
+            "strengths": ["강점"],
+            "weaknesses": ["약점"],
+            "revisionDirections": ["수정"],
+            "nextActions": ["다음"],
+            "rubricScores": [
+                {
+                    "category": "JD 반영도",
+                    "score": 22,
+                    "maxScore": 25,
+                    "evidenceText": "Python FastAPI PostgreSQL Redis",
+                    "evidenceSource": "JD",
+                },
+                {
+                    "category": "직무 적합도",
+                    "score": 21,
+                    "maxScore": 25,
+                    "evidenceText": "FastAPI, PostgreSQL, Redis 기반 백엔드 프로젝트 담당",
+                    "evidenceSource": "resume",
+                },
+                {
+                    "category": "경험 구체성",
+                    "score": 16,
+                    "maxScore": 20,
+                    "evidenceText": "FastAPI API 설계와 PostgreSQL 성능 개선을 담당했습니다.",
+                    "evidenceSource": "coverLetter",
+                },
+                {
+                    "category": "성과/근거",
+                    "score": 12,
+                    "maxScore": 15,
+                    "evidenceText": "Redis 캐시를 적용해 조회 응답을 개선했고 장애 로그를 분석했습니다.",
+                    "evidenceSource": "coverLetter",
+                },
+                {
+                    "category": "문항 적합성",
+                    "score": 8,
+                    "maxScore": 10,
+                    "evidenceText": "FastAPI API 설계와 PostgreSQL 성능 개선",
+                    "evidenceSource": "coverLetter",
+                },
+                {
+                    "category": "문장 완성도",
+                    "score": 4,
+                    "maxScore": 5,
+                    "evidenceText": "API 아키텍처와 캐시 키 설계 문서",
+                    "evidenceSource": "portfolio",
+                },
+            ],
+            "questionScores": [
+                {
+                    "questionNumber": 1,
+                    "title": "전체 자소서",
+                    "score": 88,
+                    "feedback": "JD와 연결됩니다.",
+                }
+            ],
+        },
+    )
+
+    evaluation = run_cover_letter_evaluator_agent(payload, jd_context, evidence_context)
+
+    assert evaluation["totalScore"] == 83
+    assert evaluation["jdAlignmentScore"] == 88
+    assert evaluation["jobFitScore"] == 84
+
+
+def test_cover_letter_validator_rejects_top_score_and_rubric_mismatch(monkeypatch):
+    monkeypatch.setattr(settings, "OPENAI_API_KEY", None)
+    payload = _cover_letter_payload()
+    jd_context = run_jd_analyzer_agent(payload)
+    rag_context = run_rag_retriever_agent(payload, jd_context)
+    evidence_context = run_evidence_extractor_agent(payload, jd_context, rag_context)
+    evaluation = run_cover_letter_evaluator_agent(payload, jd_context, evidence_context)
+
+    evaluation["rubricScores"][0].score = 22
+    evaluation["jdAlignmentScore"] = 35
+
+    validation = run_cover_letter_evaluation_validator_agent(
+        evaluation,
+        jd_context,
+        evidence_context,
+    )
+
+    assert validation.valid is False
+    assert any("JD 반영도" in reason for reason in validation.reasons)
 
 
 def test_interview_rag_evidence_does_not_replace_answer_score(monkeypatch):
