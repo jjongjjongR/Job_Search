@@ -1,11 +1,13 @@
 'use client';
 
 // 2026-05-05 신규: 15단계에서 실제 면접 API 흐름을 프론트 화면에 연결
+import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import {
   AlertCircle,
   CheckCircle2,
   FileText,
+  Home,
   Loader2,
   Mic,
   Play,
@@ -656,10 +658,19 @@ export default function InterviewPage() {
         title="로그인 후 AI 면접을 시작할 수 있습니다"
         description="면접 세션, 답변 제출, 최종 리포트는 로그인한 사용자 기준으로 저장됩니다."
       >
-        <LoginRequiredCard
-          title="로그인이 필요합니다"
-          description="JWT 인증 후 면접 세션을 시작하고 답변 기록을 저장할 수 있습니다."
-        />
+        <div className="space-y-4">
+          <Link
+            href="/"
+            className="inline-flex items-center gap-2 rounded-[8px] border border-[var(--border-soft)] bg-white px-4 py-2 text-sm font-semibold text-[var(--text)]"
+          >
+            <Home className="h-4 w-4" />
+            홈으로
+          </Link>
+          <LoginRequiredCard
+            title="로그인이 필요합니다"
+            description="JWT 인증 후 면접 세션을 시작하고 답변 기록을 저장할 수 있습니다."
+          />
+        </div>
       </FeatureShell>
     );
   }
@@ -667,14 +678,23 @@ export default function InterviewPage() {
   return (
     <section className="mx-auto max-w-5xl">
       <div className="rounded-[8px] border border-[var(--border-soft)] bg-[var(--page-panel)] p-6 shadow-[0_24px_80px_rgba(16,36,61,0.08)] backdrop-blur">
-        <div>
-          <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[var(--accent)]">
-            AI Interview
-          </p>
-          <h1 className="mt-3 text-3xl font-bold sm:text-4xl">AI 면접 연습</h1>
-          <p className="mt-4 max-w-3xl leading-7 text-[var(--text-muted)]">
-            질문을 듣고 답변을 제출한 뒤 최종 리포트를 확인합니다.
-          </p>
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[var(--accent)]">
+              AI Interview
+            </p>
+            <h1 className="mt-3 text-3xl font-bold sm:text-4xl">AI 면접 연습</h1>
+            <p className="mt-4 max-w-3xl leading-7 text-[var(--text-muted)]">
+              질문을 듣고 답변을 제출한 뒤 최종 리포트를 확인합니다.
+            </p>
+          </div>
+          <Link
+            href="/"
+            className="inline-flex items-center gap-2 rounded-[8px] border border-[var(--border-soft)] bg-white px-4 py-2 text-sm font-semibold text-[var(--text)]"
+          >
+            <Home className="h-4 w-4" />
+            홈으로
+          </Link>
         </div>
 
         <section className="mt-6 rounded-[8px] border border-[var(--border-soft)] bg-white p-6">

@@ -26,6 +26,8 @@ import { JobsService } from '../jobs/jobs.service';
 import { FilesService } from '../files/files.service';
 import { extractTextFromStoredFile } from '../cover-letter/utils/document-text-extractor';
 
+const MIN_FINAL_REPORT_TURN_COUNT = 5;
+
 interface InterviewSessionRecord extends InterviewSessionSummaryDto {
   userId: string;
   maxQuestionCount: number;
@@ -368,10 +370,43 @@ export class InterviewService {
       sessionId,
       reason: payload.reason,
     });
+    const turns = await this.interviewTurnRepository.find({
+      where: { sessionId },
+      order: { turnIndex: 'ASC' },
+    });
 
     session.status = response.status;
     session.finishedAt = response.finishedAt;
     this.sessions.set(sessionId, session);
+
+    // 2026-05-28 수정: Redis 임시 점수가 만료되어 AI가 CANCELLED를 반환해도 DB에 5턴 이상 저장되어 있으면 리포트를 복구한다.
+    if (
+      response.status === InterviewSessionStatus.CANCELLED &&
+      turns.length >= MIN_FINAL_REPORT_TURN_COUNT
+    ) {
+      const fallbackReport = this.buildDetailedFinalReport(
+        this.buildFinalReportFromTurns(turns),
+        turns,
+      );
+
+      await this.interviewSessionRepository.update(
+        { id: sessionId },
+        {
+          status: InterviewSessionStatus.FINISHED,
+          finalTotalScore: fallbackReport.totalScore,
+          finalGrade: fallbackReport.grade,
+          finalSummary: fallbackReport.summary,
+          finishedAt: new Date(response.finishedAt),
+        },
+      );
+
+      return {
+        sessionId,
+        status: InterviewSessionStatus.FINISHED,
+        finishedAt: response.finishedAt,
+        finalReport: fallbackReport,
+      };
+    }
 
     // 2026-04-29 신규: 5문항 미만 종료는 기준사항에 따라 평가 리포트 없이 부분 턴 기록을 삭제
     if (response.status === InterviewSessionStatus.CANCELLED) {
@@ -407,10 +442,6 @@ export class InterviewService {
       },
     );
 
-    const turns = await this.interviewTurnRepository.find({
-      where: { sessionId },
-      order: { turnIndex: 'ASC' },
-    });
     const finalReport = this.buildDetailedFinalReport(
       {
         totalScore: response.finalReport.totalScore,
@@ -446,6 +477,8 @@ export class InterviewService {
       currentQuestionNumber: session.answeredCount + 1,
       createdAt: session.createdAt.toISOString(),
       finishedAt: session.finishedAt?.toISOString() ?? null,
+      finalTotalScore: session.finalTotalScore,
+      finalGrade: session.finalGrade,
     }));
   }
 
@@ -470,6 +503,8 @@ export class InterviewService {
       currentQuestionNumber: session.answeredCount + 1,
       createdAt: session.createdAt.toISOString(),
       finishedAt: session.finishedAt?.toISOString() ?? null,
+      finalTotalScore: session.finalTotalScore,
+      finalGrade: session.finalGrade,
       finalReport: null,
     };
 
@@ -530,6 +565,21 @@ export class InterviewService {
     }));
   }
 
+  // 2026-05-28 신규: 마이페이지에서 저장된 면접 리포트/세션을 삭제한다.
+  async deleteSession(userId: string, sessionId: string): Promise<void> {
+    const session = await this.interviewSessionRepository.findOneBy({
+      id: sessionId,
+      userId,
+    });
+    if (!session) {
+      throw new NotFoundException('면접 세션을 찾을 수 없습니다.');
+    }
+
+    this.sessions.delete(sessionId);
+    this.sessionTurns.delete(sessionId);
+    await this.interviewSessionRepository.remove(session);
+  }
+
   // 2026-04-10 신규: 세션 소유권을 확인하면서 조회하는 내부 헬퍼
   private getOwnedSession(
     userId: string,
@@ -574,6 +624,23 @@ export class InterviewService {
         feedbackText: turn.feedbackText ?? '',
         nonverbalSummaryText: turn.nonverbalSummaryText ?? '',
       })),
+    };
+  }
+
+  // 2026-05-28 신규: Redis 임시 점수 누락 시 DB에 저장된 턴만으로 최종 리포트 기본값을 복구한다.
+  private buildFinalReportFromTurns(turns: InterviewTurn[]) {
+    const totalScore = this.calculateAverageScore(turns, 'totalScore');
+
+    return {
+      totalScore,
+      grade: this.buildInterviewGrade(totalScore),
+      summary:
+        `저장된 ${turns.length}개 답변 기준으로 최종 리포트를 복구했습니다. ` +
+        `내용 평균은 ${this.calculateAverageScore(turns, 'contentScore')}/85점, ` +
+        `비언어 평균은 ${this.calculateAverageScore(turns, 'nonverbalScore')}/15점입니다.`,
+      strengths: this.buildStrengthsFromTurns(turns),
+      weaknesses: this.buildWeaknessesFromTurns(turns),
+      practiceDirections: this.buildPracticeDirectionsFromTurns(turns),
     };
   }
 
@@ -662,7 +729,7 @@ export class InterviewService {
 
   private calculateAverageScore(
     turns: InterviewTurn[],
-    key: 'contentScore' | 'nonverbalScore',
+    key: 'contentScore' | 'nonverbalScore' | 'totalScore',
   ) {
     const values = turns
       .map((turn) => {

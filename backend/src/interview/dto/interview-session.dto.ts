@@ -451,6 +451,16 @@ export class InterviewSessionSummaryDto {
   @IsOptional()
   @IsString()
   finishedAt?: string | null;
+
+  @ApiPropertyOptional({ description: '최종 총점', example: 81 })
+  @IsOptional()
+  @IsInt()
+  finalTotalScore?: number | null;
+
+  @ApiPropertyOptional({ description: '최종 등급', example: '우수' })
+  @IsOptional()
+  @IsString()
+  finalGrade?: string | null;
 }
 
 export class InterviewSessionDetailDto extends InterviewSessionSummaryDto {

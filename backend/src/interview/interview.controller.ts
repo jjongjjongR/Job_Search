@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Post,
@@ -139,6 +140,17 @@ export class InterviewController {
     @Param('sessionId') sessionId: string,
   ): Promise<InterviewSessionDetailDto> {
     return this.interviewService.getSession(currentUser.userId, sessionId);
+  }
+
+  // 2026-05-28 신규: 마이페이지 저장 면접 리포트 삭제 API
+  @Delete(':sessionId')
+  @ApiOperation({ summary: '면접 세션 삭제' })
+  @ApiOkResponse({ description: '삭제 완료' })
+  deleteSession(
+    @CurrentUser() currentUser: JwtUser,
+    @Param('sessionId') sessionId: string,
+  ): Promise<void> {
+    return this.interviewService.deleteSession(currentUser.userId, sessionId);
   }
 
   // 2026-04-10 신규: 현재 메모리 기준 면접 세션 턴 목록 조회 API 추가
