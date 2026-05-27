@@ -47,6 +47,14 @@ input {
   outline: none;
 }
 
+.form-input {
+  width: 100%;
+  border-radius: 8px;
+  border: 1px solid var(--border-soft);
+  background: var(--card-soft);
+  padding: 0.75rem 1rem;
+}
+
 ::selection {
   background: rgba(30, 111, 217, 0.18);
 }

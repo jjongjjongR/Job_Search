@@ -1,9 +1,10 @@
 'use client';
 
+import type React from 'react';
 import { useEffect, useState } from 'react';
 import { FeatureShell } from '@/components/feature-shell';
 import { LoginRequiredCard } from '@/components/login-required-card';
-import { apiRequest, ApiError } from '@/lib/api';
+import { ApiError, apiRequest } from '@/lib/api';
 import { getAccessToken, getStoredUser, type AuthUser } from '@/lib/auth';
 
 type JobAnalysisResponse = {
@@ -18,7 +19,9 @@ type JobAnalysisResponse = {
   status: string;
 };
 
-type CoverLetterFeedbackResponse = {
+type CoverLetterFeedbackResponse = CoverLetterReportDetail;
+
+type CoverLetterReportDetail = {
   reportId: string;
   companyName: string;
   positionName: string;
@@ -58,37 +61,13 @@ type CoverLetterRagEvidence = {
   score: number;
 };
 
-type CoverLetterReportSummary = {
-  reportId: string;
-  companyName: string;
-  positionName: string;
-  totalScore: number;
-  createdAt: string;
-};
-
-type CoverLetterReportDetail = CoverLetterReportSummary & {
-  jdAlignmentScore: number;
-  jobFitScore: number;
-  confidence: number;
-  verifiedJdKeywords: string[];
-  rubricScores: CoverLetterRubricScore[];
-  ragEvidence: CoverLetterRagEvidence[];
-  summary: string;
-  revisedDraft: string;
-  questionScores: {
-    questionNumber: number;
-    title: string;
-    score: number;
-    feedback: string;
-  }[];
-  strengths: string[];
-  weaknesses: string[];
-  revisionDirections: string[];
-  nextActions?: string[];
-};
+type MainTab = 'create' | 'result';
+type ResultTab = 'summary' | 'questions' | 'draft' | 'details';
 
 export default function AICoverLetterPage() {
   const [user, setUser] = useState<AuthUser | null>(null);
+  const [mainTab, setMainTab] = useState<MainTab>('create');
+  const [resultTab, setResultTab] = useState<ResultTab>('summary');
   const [jobForm, setJobForm] = useState({
     jobUrl: '',
     manualCompanyName: '',
@@ -98,7 +77,6 @@ export default function AICoverLetterPage() {
   const [analysisError, setAnalysisError] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [jobAnalysis, setJobAnalysis] = useState<JobAnalysisResponse | null>(null);
-
   const [inputMode, setInputMode] = useState<'text' | 'file'>('text');
   const [feedbackForm, setFeedbackForm] = useState({
     jobAnalysisRequestId: '',
@@ -117,14 +95,14 @@ export default function AICoverLetterPage() {
   });
   const [feedbackError, setFeedbackError] = useState('');
   const [isSubmittingFeedback, setIsSubmittingFeedback] = useState(false);
-  const [latestReport, setLatestReport] =
-    useState<CoverLetterFeedbackResponse | CoverLetterReportDetail | null>(null);
+  const [latestReport, setLatestReport] = useState<CoverLetterReportDetail | null>(
+    null,
+  );
 
   useEffect(() => {
     const currentUser = getStoredUser();
     const accessToken = getAccessToken();
 
-    // 2026-04-15 수정: 저장된 user만 있고 토큰이 없는 오래된 로그인 상태에서는 보호 API를 호출하지 않음
     if (!currentUser || !accessToken) {
       setUser(null);
       return;
@@ -134,7 +112,6 @@ export default function AICoverLetterPage() {
   }, []);
 
   const handleAnalyze = async () => {
-    // 2026-04-15 신규: 버튼 클릭 시점에도 토큰 존재 여부를 다시 확인해 만료된 로그인으로 API를 호출하지 않음
     if (!getAccessToken()) {
       setUser(null);
       setAnalysisError('로그인이 만료되었습니다. 다시 로그인해 주세요.');
@@ -162,7 +139,6 @@ export default function AICoverLetterPage() {
             ? error.message
             : '공고 분석에 실패했습니다.',
       );
-      // 2026-04-15 신규: 401 발생 시 화면도 즉시 비로그인 상태로 맞춰 로그인 안내를 보여줌
       if (error instanceof ApiError && error.status === 401) {
         setUser(null);
       }
@@ -172,7 +148,6 @@ export default function AICoverLetterPage() {
   };
 
   const handleSubmitFeedback = async () => {
-    // 2026-04-15 신규: 자소서 피드백 생성 직전에도 토큰을 다시 확인해 Unauthorized 노출을 줄임
     if (!getAccessToken()) {
       setUser(null);
       setFeedbackError('로그인이 만료되었습니다. 다시 로그인해 주세요.');
@@ -226,6 +201,8 @@ export default function AICoverLetterPage() {
         `/ai/cover-letter/reports/${created.reportId}`,
       );
       setLatestReport(detail);
+      setMainTab('result');
+      setResultTab('summary');
     } catch (error) {
       setFeedbackError(
         error instanceof ApiError && error.status === 401
@@ -234,7 +211,6 @@ export default function AICoverLetterPage() {
             ? error.message
             : '자소서 피드백 생성에 실패했습니다.',
       );
-      // 2026-04-15 신규: 인증 실패 시 저장된 로그인 표시도 바로 정리함
       if (error instanceof ApiError && error.status === 401) {
         setUser(null);
       }
@@ -246,8 +222,8 @@ export default function AICoverLetterPage() {
   return (
     <FeatureShell
       eyebrow="AI Cover Letter"
-      title="자소서 AI 평가와 수정 초안을 생성합니다"
-      description="공고 분석을 먼저 만든 뒤, 텍스트 또는 파일 입력으로 자소서 피드백과 수정 초안을 생성합니다. 저장된 리포트 목록은 마이페이지에서 다시 확인할 수 있습니다."
+      title="AI 자기소개서"
+      description="공고를 분석하고 자기소개서 피드백과 수정 초안을 생성합니다."
     >
       {!user ? (
         <LoginRequiredCard
@@ -255,339 +231,481 @@ export default function AICoverLetterPage() {
           description="공고 분석 저장, 자소서 리포트 생성, 지난 결과 재조회까지 모두 회원 계정 기준으로 동작합니다."
         />
       ) : (
-        <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
-          <div className="space-y-6">
-            <section className="rounded-[28px] bg-white p-8 shadow-[0_18px_50px_rgba(16,36,61,0.07)]">
-              <h2 className="text-2xl font-bold">1. 공고 분석 만들기</h2>
-              <p className="mt-3 text-sm leading-6 text-[var(--text-muted)]">
-                URL과 수동 입력을 함께 넣을 수 있습니다. URL 분석이 애매하면 수동 입력 값이 기준 데이터가 됩니다.
-              </p>
+        <div className="space-y-6">
+          <SegmentedTabs
+            items={[
+              { value: 'create', label: '1. 작성하기' },
+              { value: 'result', label: '2. 분석 결과' },
+            ]}
+            value={mainTab}
+            onChange={(value) => setMainTab(value as MainTab)}
+          />
 
-              <div className="mt-6 grid gap-4">
-                <label className="block">
-                  <span className="mb-2 block text-sm font-semibold">공고 URL</span>
-                  <input
-                    value={jobForm.jobUrl}
-                    onChange={(event) =>
-                      setJobForm((current) => ({
-                        ...current,
-                        jobUrl: event.target.value,
-                      }))
-                    }
-                    placeholder="https://careers.example.com/backend-engineer"
-                    className="w-full rounded-2xl border border-[var(--border-soft)] bg-[var(--card-soft)] px-4 py-3"
-                  />
-                </label>
-
-                <div className="grid gap-4 md:grid-cols-2">
-                  <label className="block">
-                    <span className="mb-2 block text-sm font-semibold">회사명</span>
-                    <input
-                      value={jobForm.manualCompanyName}
-                      onChange={(event) =>
-                        setJobForm((current) => ({
-                          ...current,
-                          manualCompanyName: event.target.value,
-                        }))
-                      }
-                      placeholder="온세상이취업"
-                      className="w-full rounded-2xl border border-[var(--border-soft)] bg-[var(--card-soft)] px-4 py-3"
-                    />
-                  </label>
-                  <label className="block">
-                    <span className="mb-2 block text-sm font-semibold">직무명</span>
-                    <input
-                      value={jobForm.manualJobTitle}
-                      onChange={(event) =>
-                        setJobForm((current) => ({
-                          ...current,
-                          manualJobTitle: event.target.value,
-                        }))
-                      }
-                      placeholder="백엔드 개발자"
-                      className="w-full rounded-2xl border border-[var(--border-soft)] bg-[var(--card-soft)] px-4 py-3"
-                    />
-                  </label>
-                </div>
-
-                <label className="block">
-                  <span className="mb-2 block text-sm font-semibold">JD 본문</span>
-                  <textarea
-                    value={jobForm.manualJdText}
-                    onChange={(event) =>
-                      setJobForm((current) => ({
-                        ...current,
-                        manualJdText: event.target.value,
-                      }))
-                    }
-                    rows={5}
-                    placeholder="FastAPI, PostgreSQL, Redis 기반 백엔드 서비스 개발..."
-                    className="w-full rounded-2xl border border-[var(--border-soft)] bg-[var(--card-soft)] px-4 py-3"
-                  />
-                </label>
-
-                {analysisError ? (
-                  <p className="text-sm text-red-600">{analysisError}</p>
-                ) : null}
-
-                <button
-                  type="button"
-                  onClick={() => void handleAnalyze()}
-                  disabled={isAnalyzing}
-                  className="rounded-full bg-[var(--accent)] px-5 py-3 font-semibold text-white shadow-[0_12px_28px_rgba(30,111,217,0.28)] disabled:opacity-60"
-                >
-                  {isAnalyzing ? '공고 분석 중...' : '공고 분석 생성'}
-                </button>
-              </div>
-
-              {jobAnalysis ? (
-                <div className="mt-6 rounded-[24px] border border-[var(--border-soft)] bg-[var(--card-soft)] p-5">
-                  <p className="text-sm font-semibold text-[var(--accent)]">
-                    분석 ID: {jobAnalysis.jobAnalysisRequestId}
-                  </p>
-                  <h3 className="mt-3 text-lg font-bold">
-                    {jobAnalysis.companyName} / {jobAnalysis.positionName}
-                  </h3>
-                  <p className="mt-3 text-sm leading-6 text-[var(--text-muted)]">
-                    {jobAnalysis.jdText}
-                  </p>
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    {(jobAnalysis.extractedSkills ?? []).map((skill) => (
-                      <span
-                        key={skill}
-                        className="rounded-full bg-white px-3 py-2 text-xs font-semibold text-[var(--accent)]"
-                      >
-                        기술 {skill}
-                      </span>
-                    ))}
-                    {(jobAnalysis.extractedKeywords ?? jobAnalysis.keywords).map(
-                      (keyword) => (
-                        <span
-                          key={keyword}
-                          className="rounded-full border border-[var(--border-soft)] bg-white px-3 py-2 text-xs font-semibold"
-                        >
-                          {keyword}
-                        </span>
-                      ),
-                    )}
-                  </div>
-                </div>
-              ) : null}
-            </section>
-
-            <section className="rounded-[28px] bg-white p-8 shadow-[0_18px_50px_rgba(16,36,61,0.07)]">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <h2 className="text-2xl font-bold">2. 자소서 피드백 생성</h2>
-                  <p className="mt-3 text-sm leading-6 text-[var(--text-muted)]">
-                    최근에 만든 공고 분석 ID를 그대로 재사용하거나, 이미 저장된 ID를 직접 넣을 수 있습니다.
-                  </p>
-                </div>
-                <div className="flex gap-2 rounded-full bg-[var(--card-soft)] p-1">
-                  {[
-                    { value: 'text', label: '텍스트 입력' },
-                    { value: 'file', label: '파일 업로드' },
-                  ].map((option) => (
-                    <button
-                      key={option.value}
-                      type="button"
-                      onClick={() =>
-                        setInputMode(option.value as 'text' | 'file')
-                      }
-                      className={`rounded-full px-4 py-2 text-sm font-semibold ${
-                        inputMode === option.value
-                          ? 'bg-[var(--accent)] text-white'
-                          : 'text-[var(--text-muted)]'
-                      }`}
-                    >
-                      {option.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="mt-6 grid gap-4">
-                <label className="block">
-                  <span className="mb-2 block text-sm font-semibold">
-                    공고 분석 ID
-                  </span>
-                  <input
-                    value={feedbackForm.jobAnalysisRequestId}
-                    onChange={(event) =>
-                      setFeedbackForm((current) => ({
-                        ...current,
-                        jobAnalysisRequestId: event.target.value,
-                      }))
-                    }
-                    placeholder="jar-..."
-                    className="w-full rounded-2xl border border-[var(--border-soft)] bg-[var(--card-soft)] px-4 py-3"
-                  />
-                </label>
-
-                {inputMode === 'text' ? (
-                  <>
-                    <label className="block">
-                      <span className="mb-2 block text-sm font-semibold">
-                        자소서 본문
-                      </span>
-                      <textarea
-                        value={feedbackForm.coverLetterText}
-                        onChange={(event) =>
-                          setFeedbackForm((current) => ({
-                            ...current,
-                            coverLetterText: event.target.value,
-                          }))
-                        }
-                        rows={6}
-                        className="w-full rounded-2xl border border-[var(--border-soft)] bg-[var(--card-soft)] px-4 py-3"
-                      />
-                    </label>
-                    <label className="block">
-                      <span className="mb-2 block text-sm font-semibold">
-                        이력서 텍스트
-                      </span>
-                      <textarea
-                        value={feedbackForm.resumeText}
-                        onChange={(event) =>
-                          setFeedbackForm((current) => ({
-                            ...current,
-                            resumeText: event.target.value,
-                          }))
-                        }
-                        rows={4}
-                        className="w-full rounded-2xl border border-[var(--border-soft)] bg-[var(--card-soft)] px-4 py-3"
-                      />
-                    </label>
-                    <label className="block">
-                      <span className="mb-2 block text-sm font-semibold">
-                        포트폴리오 텍스트
-                      </span>
-                      <textarea
-                        value={feedbackForm.portfolioText}
-                        onChange={(event) =>
-                          setFeedbackForm((current) => ({
-                            ...current,
-                            portfolioText: event.target.value,
-                          }))
-                        }
-                        rows={4}
-                        className="w-full rounded-2xl border border-[var(--border-soft)] bg-[var(--card-soft)] px-4 py-3"
-                      />
-                    </label>
-                  </>
-                ) : (
-                  <div className="grid gap-4 md:grid-cols-3">
-                    <FileInput
-                      label="자소서 파일"
-                      onChange={(file) =>
-                        setFiles((current) => ({
-                          ...current,
-                          coverLetterFile: file,
-                        }))
-                      }
-                    />
-                    <FileInput
-                      label="이력서 파일"
-                      onChange={(file) =>
-                        setFiles((current) => ({
-                          ...current,
-                          resumeFile: file,
-                        }))
-                      }
-                    />
-                    <FileInput
-                      label="포트폴리오 파일"
-                      onChange={(file) =>
-                        setFiles((current) => ({
-                          ...current,
-                          portfolioFile: file,
-                        }))
-                      }
-                    />
-                  </div>
-                )}
-
-                {feedbackError ? (
-                  <p className="text-sm text-red-600">{feedbackError}</p>
-                ) : null}
-
-                <button
-                  type="button"
-                  onClick={() => void handleSubmitFeedback()}
-                  disabled={isSubmittingFeedback}
-                  className="rounded-full bg-[var(--card-strong)] px-5 py-3 font-semibold text-white shadow-[0_12px_28px_rgba(16,36,61,0.18)] disabled:opacity-60"
-                >
-                  {isSubmittingFeedback ? '피드백 생성 중...' : '자소서 피드백 생성'}
-                </button>
-              </div>
-            </section>
-          </div>
-
-          <div className="space-y-6">
-            <section className="rounded-[28px] bg-white p-8 shadow-[0_18px_50px_rgba(16,36,61,0.07)]">
-              <h2 className="text-2xl font-bold">분석 결과</h2>
-              {!latestReport ? (
-                <p className="mt-4 text-sm leading-6 text-[var(--text-muted)]">
-                  새 분석을 생성하면 결과가 여기에 표시됩니다. 저장된 리포트는 마이페이지에서 확인할 수 있습니다.
-                </p>
-              ) : (
-                <div className="mt-5 space-y-5">
-                  <div className="rounded-[24px] bg-[var(--card-soft)] p-5">
-                    <p className="text-sm font-semibold text-[var(--accent)]">
-                      {latestReport.companyName} / {latestReport.positionName}
-                    </p>
-                    <p className="mt-3 text-3xl font-bold">
-                      {latestReport.totalScore}점
-                    </p>
-                    <div className="mt-4 grid gap-3 md:grid-cols-2">
-                      <ScoreCard
-                        label="JD 반영도"
-                        value={latestReport.jdAlignmentScore}
-                      />
-                      <ScoreCard
-                        label="직무 적합도"
-                        value={latestReport.jobFitScore}
-                      />
-                    </div>
-                    <TrustSummary
-                      confidence={latestReport.confidence}
-                      keywords={latestReport.verifiedJdKeywords}
-                    />
-                    <p className="mt-3 text-sm leading-6 text-[var(--text-muted)]">
-                      {latestReport.summary}
-                    </p>
-                  </div>
-
-                  <QuestionScoreList items={latestReport.questionScores} />
-                  <RubricScoreList items={latestReport.rubricScores} />
-                  <RagEvidenceList items={latestReport.ragEvidence} />
-                  <ResultList title="강점" items={latestReport.strengths} />
-                  <ResultList title="보완점" items={latestReport.weaknesses} />
-                  <ResultList
-                    title="다음 액션"
-                    items={
-                      latestReport.nextActions ?? latestReport.revisionDirections
-                    }
-                  />
-                  <DraftCard draft={latestReport.revisedDraft} />
-                </div>
-              )}
-            </section>
-
-            <div className="rounded-[28px] border border-[var(--border-soft)] bg-white p-6">
-              <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[var(--accent)]">
-                이용 안내
-              </p>
-              <ul className="mt-4 space-y-3 text-sm leading-6 text-[var(--text-muted)]">
-                <li>채용 공고를 먼저 분석하면 자기소개서 평가가 더 정확해집니다.</li>
-                <li>자기소개서는 직접 입력하거나 파일로 올릴 수 있습니다.</li>
-                <li>생성된 결과는 마이페이지에서 다시 확인할 수 있습니다.</li>
-              </ul>
+          {mainTab === 'create' ? (
+            <div className="space-y-6">
+              <JobAnalysisPanel
+                jobForm={jobForm}
+                setJobForm={setJobForm}
+                jobAnalysis={jobAnalysis}
+                analysisError={analysisError}
+                isAnalyzing={isAnalyzing}
+                onAnalyze={handleAnalyze}
+              />
+              <FeedbackPanel
+                inputMode={inputMode}
+                setInputMode={setInputMode}
+                feedbackForm={feedbackForm}
+                setFeedbackForm={setFeedbackForm}
+                setFiles={setFiles}
+                feedbackError={feedbackError}
+                isSubmittingFeedback={isSubmittingFeedback}
+                onSubmitFeedback={handleSubmitFeedback}
+              />
             </div>
-          </div>
+          ) : (
+            <ReportPanel
+              report={latestReport}
+              resultTab={resultTab}
+              setResultTab={setResultTab}
+              onBackToCreate={() => setMainTab('create')}
+            />
+          )}
         </div>
       )}
     </FeatureShell>
+  );
+}
+
+function JobAnalysisPanel({
+  jobForm,
+  setJobForm,
+  jobAnalysis,
+  analysisError,
+  isAnalyzing,
+  onAnalyze,
+}: {
+  jobForm: {
+    jobUrl: string;
+    manualCompanyName: string;
+    manualJobTitle: string;
+    manualJdText: string;
+  };
+  setJobForm: React.Dispatch<
+    React.SetStateAction<{
+      jobUrl: string;
+      manualCompanyName: string;
+      manualJobTitle: string;
+      manualJdText: string;
+    }>
+  >;
+  jobAnalysis: JobAnalysisResponse | null;
+  analysisError: string;
+  isAnalyzing: boolean;
+  onAnalyze: () => void;
+}) {
+  return (
+    <section className="rounded-[8px] bg-white p-7 shadow-[0_18px_50px_rgba(16,36,61,0.07)]">
+      <div className="flex flex-col gap-2">
+        <p className="text-sm font-semibold text-[var(--accent)]">1-1</p>
+        <h2 className="text-2xl font-bold">공고 분석 만들기</h2>
+        <p className="text-sm leading-6 text-[var(--text-muted)]">
+          공고 URL 또는 직접 입력한 JD를 기준으로 자기소개서 평가 기준을 준비합니다.
+        </p>
+      </div>
+
+      <div className="mt-6 grid gap-4">
+        <Field label="공고 URL">
+          <input
+            value={jobForm.jobUrl}
+            onChange={(event) =>
+              setJobForm((current) => ({
+                ...current,
+                jobUrl: event.target.value,
+              }))
+            }
+            placeholder="https://careers.example.com/backend-engineer"
+            className="form-input"
+          />
+        </Field>
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <Field label="회사명">
+            <input
+              value={jobForm.manualCompanyName}
+              onChange={(event) =>
+                setJobForm((current) => ({
+                  ...current,
+                  manualCompanyName: event.target.value,
+                }))
+              }
+              placeholder="온세상이취업"
+              className="form-input"
+            />
+          </Field>
+          <Field label="직무명">
+            <input
+              value={jobForm.manualJobTitle}
+              onChange={(event) =>
+                setJobForm((current) => ({
+                  ...current,
+                  manualJobTitle: event.target.value,
+                }))
+              }
+              placeholder="백엔드 개발자"
+              className="form-input"
+            />
+          </Field>
+        </div>
+
+        <Field label="JD 본문">
+          <textarea
+            value={jobForm.manualJdText}
+            onChange={(event) =>
+              setJobForm((current) => ({
+                ...current,
+                manualJdText: event.target.value,
+              }))
+            }
+            rows={5}
+            placeholder="주요 업무, 자격 요건, 우대 사항을 붙여넣어 주세요."
+            className="form-input"
+          />
+        </Field>
+
+        {analysisError ? <p className="text-sm text-red-600">{analysisError}</p> : null}
+
+        <button
+          type="button"
+          onClick={() => void onAnalyze()}
+          disabled={isAnalyzing}
+          className="rounded-[8px] bg-[var(--accent)] px-5 py-3 font-semibold text-white shadow-[0_12px_28px_rgba(30,111,217,0.22)] disabled:opacity-60"
+        >
+          {isAnalyzing ? '공고 분석 중...' : '공고 분석 생성'}
+        </button>
+      </div>
+
+      {jobAnalysis ? (
+        <div className="mt-6 rounded-[8px] border border-[var(--border-soft)] bg-[var(--card-soft)] p-5">
+          <p className="text-sm font-semibold text-[var(--accent)]">
+            {jobAnalysis.companyName} / {jobAnalysis.positionName}
+          </p>
+          <p className="mt-2 line-clamp-3 text-sm leading-6 text-[var(--text-muted)]">
+            {jobAnalysis.jdText}
+          </p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            {(jobAnalysis.extractedSkills ?? []).slice(0, 6).map((skill) => (
+              <Chip key={skill}>{skill}</Chip>
+            ))}
+            {(jobAnalysis.extractedKeywords ?? jobAnalysis.keywords)
+              .slice(0, 8)
+              .map((keyword) => (
+                <Chip key={keyword}>{keyword}</Chip>
+              ))}
+          </div>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function FeedbackPanel({
+  inputMode,
+  setInputMode,
+  feedbackForm,
+  setFeedbackForm,
+  setFiles,
+  feedbackError,
+  isSubmittingFeedback,
+  onSubmitFeedback,
+}: {
+  inputMode: 'text' | 'file';
+  setInputMode: (mode: 'text' | 'file') => void;
+  feedbackForm: {
+    jobAnalysisRequestId: string;
+    coverLetterText: string;
+    resumeText: string;
+    portfolioText: string;
+  };
+  setFeedbackForm: React.Dispatch<
+    React.SetStateAction<{
+      jobAnalysisRequestId: string;
+      coverLetterText: string;
+      resumeText: string;
+      portfolioText: string;
+    }>
+  >;
+  setFiles: React.Dispatch<
+    React.SetStateAction<{
+      coverLetterFile: File | null;
+      resumeFile: File | null;
+      portfolioFile: File | null;
+    }>
+  >;
+  feedbackError: string;
+  isSubmittingFeedback: boolean;
+  onSubmitFeedback: () => void;
+}) {
+  return (
+    <section className="rounded-[8px] bg-white p-7 shadow-[0_18px_50px_rgba(16,36,61,0.07)]">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <p className="text-sm font-semibold text-[var(--accent)]">1-2</p>
+          <h2 className="mt-2 text-2xl font-bold">자소서 피드백 생성</h2>
+          <p className="mt-2 text-sm leading-6 text-[var(--text-muted)]">
+            자기소개서와 보조 자료를 입력하면 분석 결과 탭에 리포트가 생성됩니다.
+          </p>
+        </div>
+        <SegmentedTabs
+          items={[
+            { value: 'text', label: '텍스트 입력' },
+            { value: 'file', label: '파일 업로드' },
+          ]}
+          value={inputMode}
+          onChange={(value) => setInputMode(value as 'text' | 'file')}
+        />
+      </div>
+
+      <div className="mt-6 grid gap-4">
+        <Field label="공고 분석 ID">
+          <input
+            value={feedbackForm.jobAnalysisRequestId}
+            onChange={(event) =>
+              setFeedbackForm((current) => ({
+                ...current,
+                jobAnalysisRequestId: event.target.value,
+              }))
+            }
+            placeholder="공고 분석을 만들면 자동으로 입력됩니다."
+            className="form-input"
+          />
+        </Field>
+
+        {inputMode === 'text' ? (
+          <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
+            <Field label="자소서 본문">
+              <textarea
+                value={feedbackForm.coverLetterText}
+                onChange={(event) =>
+                  setFeedbackForm((current) => ({
+                    ...current,
+                    coverLetterText: event.target.value,
+                  }))
+                }
+                rows={10}
+                className="form-input"
+              />
+            </Field>
+            <div className="grid gap-4">
+              <Field label="이력서 텍스트">
+                <textarea
+                  value={feedbackForm.resumeText}
+                  onChange={(event) =>
+                    setFeedbackForm((current) => ({
+                      ...current,
+                      resumeText: event.target.value,
+                    }))
+                  }
+                  rows={4}
+                  className="form-input"
+                />
+              </Field>
+              <Field label="포트폴리오 텍스트">
+                <textarea
+                  value={feedbackForm.portfolioText}
+                  onChange={(event) =>
+                    setFeedbackForm((current) => ({
+                      ...current,
+                      portfolioText: event.target.value,
+                    }))
+                  }
+                  rows={4}
+                  className="form-input"
+                />
+              </Field>
+            </div>
+          </div>
+        ) : (
+          <div className="grid gap-4 md:grid-cols-3">
+            <FileInput
+              label="자소서 파일"
+              onChange={(file) =>
+                setFiles((current) => ({ ...current, coverLetterFile: file }))
+              }
+            />
+            <FileInput
+              label="이력서 파일"
+              onChange={(file) =>
+                setFiles((current) => ({ ...current, resumeFile: file }))
+              }
+            />
+            <FileInput
+              label="포트폴리오 파일"
+              onChange={(file) =>
+                setFiles((current) => ({ ...current, portfolioFile: file }))
+              }
+            />
+          </div>
+        )}
+
+        {feedbackError ? <p className="text-sm text-red-600">{feedbackError}</p> : null}
+
+        <button
+          type="button"
+          onClick={() => void onSubmitFeedback()}
+          disabled={isSubmittingFeedback}
+          className="rounded-[8px] bg-[var(--card-strong)] px-5 py-3 font-semibold text-white shadow-[0_12px_28px_rgba(16,36,61,0.16)] disabled:opacity-60"
+        >
+          {isSubmittingFeedback ? '피드백 생성 중...' : '자소서 피드백 생성'}
+        </button>
+      </div>
+    </section>
+  );
+}
+
+function ReportPanel({
+  report,
+  resultTab,
+  setResultTab,
+  onBackToCreate,
+}: {
+  report: CoverLetterReportDetail | null;
+  resultTab: ResultTab;
+  setResultTab: (tab: ResultTab) => void;
+  onBackToCreate: () => void;
+}) {
+  if (!report) {
+    return (
+      <section className="rounded-[8px] bg-white p-8 shadow-[0_18px_50px_rgba(16,36,61,0.07)]">
+        <h2 className="text-2xl font-bold">아직 생성된 분석 결과가 없습니다</h2>
+        <p className="mt-3 text-sm leading-6 text-[var(--text-muted)]">
+          작성하기 탭에서 공고 분석과 자기소개서 피드백을 생성하면 이곳에서 결과를 확인할 수 있습니다.
+        </p>
+        <button
+          type="button"
+          onClick={onBackToCreate}
+          className="mt-6 rounded-[8px] bg-[var(--accent)] px-5 py-3 font-semibold text-white"
+        >
+          작성하러 가기
+        </button>
+      </section>
+    );
+  }
+
+  return (
+    <section className="rounded-[8px] bg-white p-7 shadow-[0_18px_50px_rgba(16,36,61,0.07)]">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <p className="text-sm font-semibold text-[var(--accent)]">
+            {report.companyName} / {report.positionName}
+          </p>
+          <h2 className="mt-2 text-3xl font-bold">분석 결과</h2>
+        </div>
+        <div className="rounded-[8px] bg-[var(--card-strong)] px-6 py-4 text-white">
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/62">
+            Total Score
+          </p>
+          <p className="mt-1 text-3xl font-bold">{report.totalScore}점</p>
+        </div>
+      </div>
+
+      <div className="mt-6 grid gap-3 md:grid-cols-3">
+        <ScoreCard label="공고 반영도" value={report.jdAlignmentScore} />
+        <ScoreCard label="직무 적합도" value={report.jobFitScore} />
+        <ScoreCard
+          label="분석 신뢰도"
+          value={Math.round((report.confidence ?? 0) * 100)}
+          suffix="%"
+        />
+      </div>
+
+      <div className="mt-6">
+        <SegmentedTabs
+          items={[
+            { value: 'summary', label: '요약' },
+            { value: 'questions', label: '문항 피드백' },
+            { value: 'draft', label: '수정 초안' },
+            { value: 'details', label: '상세 기준' },
+          ]}
+          value={resultTab}
+          onChange={(value) => setResultTab(value as ResultTab)}
+        />
+      </div>
+
+      <div className="mt-6">
+        {resultTab === 'summary' ? <SummaryView report={report} /> : null}
+        {resultTab === 'questions' ? (
+          <QuestionScoreList items={report.questionScores} />
+        ) : null}
+        {resultTab === 'draft' ? <DraftCard draft={report.revisedDraft} /> : null}
+        {resultTab === 'details' ? (
+          <DetailsView
+            rubricScores={report.rubricScores}
+            ragEvidence={report.ragEvidence}
+          />
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
+function SummaryView({ report }: { report: CoverLetterReportDetail }) {
+  return (
+    <div className="grid gap-5 xl:grid-cols-[0.95fr_1.05fr]">
+      <div className="rounded-[8px] border border-[var(--border-soft)] bg-[var(--card-soft)] p-5">
+        <h3 className="text-xl font-bold">종합 의견</h3>
+        <p className="mt-3 leading-7 text-[var(--text-muted)]">{report.summary}</p>
+        <div className="mt-5 flex flex-wrap gap-2">
+          {(report.verifiedJdKeywords ?? []).slice(0, 10).map((keyword) => (
+            <Chip key={keyword}>{keyword}</Chip>
+          ))}
+        </div>
+      </div>
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-1">
+        <ResultList title="강점" items={report.strengths} />
+        <ResultList title="보완점" items={report.weaknesses} />
+        <ResultList
+          title="다음 액션"
+          items={report.nextActions ?? report.revisionDirections}
+        />
+      </div>
+    </div>
+  );
+}
+
+function DetailsView({
+  rubricScores,
+  ragEvidence,
+}: {
+  rubricScores?: CoverLetterRubricScore[];
+  ragEvidence?: CoverLetterRagEvidence[];
+}) {
+  return (
+    <div className="space-y-5">
+      <div className="rounded-[8px] border border-[var(--border-soft)] bg-[var(--card-soft)] p-5">
+        <h3 className="text-xl font-bold">항목별 평가 기준</h3>
+        <p className="mt-2 text-sm leading-6 text-[var(--text-muted)]">
+          세부 기준은 검토가 필요할 때만 참고하는 보조 정보입니다.
+        </p>
+        <RubricScoreList items={rubricScores} />
+      </div>
+
+      <details className="rounded-[8px] border border-[var(--border-soft)] bg-white p-5">
+        <summary className="cursor-pointer font-bold">검색 근거 보기</summary>
+        <p className="mt-2 text-sm leading-6 text-[var(--text-muted)]">
+          고객 화면에서는 기본적으로 숨기는 내부 참고 근거입니다.
+        </p>
+        <RagEvidenceList items={ragEvidence} />
+      </details>
+    </div>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="block">
+      <span className="mb-2 block text-sm font-semibold">{label}</span>
+      {children}
+    </label>
   );
 }
 
@@ -599,7 +717,7 @@ function FileInput({
   onChange: (file: File | null) => void;
 }) {
   return (
-    <label className="block rounded-[24px] border border-[var(--border-soft)] bg-[var(--card-soft)] p-4">
+    <label className="block rounded-[8px] border border-[var(--border-soft)] bg-[var(--card-soft)] p-4">
       <span className="mb-3 block text-sm font-semibold">{label}</span>
       <input
         type="file"
@@ -610,31 +728,78 @@ function FileInput({
   );
 }
 
-function ResultList({ title, items }: { title: string; items: string[] }) {
+function SegmentedTabs({
+  items,
+  value,
+  onChange,
+}: {
+  items: { value: string; label: string }[];
+  value: string;
+  onChange: (value: string) => void;
+}) {
   return (
-    <div>
-      <h3 className="text-lg font-bold">{title}</h3>
-      <div className="mt-3 space-y-3">
-        {items.map((item) => (
-          <div
-            key={item}
-            className="rounded-2xl border border-[var(--border-soft)] bg-white px-4 py-4 text-sm leading-6 text-[var(--text-muted)]"
-          >
-            {item}
-          </div>
-        ))}
-      </div>
+    <div className="flex flex-wrap gap-2 rounded-[8px] border border-[var(--border-soft)] bg-white p-2">
+      {items.map((item) => (
+        <button
+          key={item.value}
+          type="button"
+          onClick={() => onChange(item.value)}
+          className={`rounded-[8px] px-4 py-2 text-sm font-semibold ${
+            value === item.value
+              ? 'bg-[var(--accent)] text-white'
+              : 'text-[var(--text-muted)] hover:bg-[var(--card-soft)]'
+          }`}
+        >
+          {item.label}
+        </button>
+      ))}
     </div>
   );
 }
 
-function ScoreCard({ label, value }: { label: string; value: number }) {
+function Chip({ children }: { children: React.ReactNode }) {
   return (
-    <div className="rounded-2xl border border-[var(--border-soft)] bg-white px-4 py-4">
-      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--text-muted)]">
+    <span className="rounded-[8px] border border-[var(--border-soft)] bg-white px-3 py-2 text-xs font-semibold text-[var(--text-muted)]">
+      {children}
+    </span>
+  );
+}
+
+function ResultList({ title, items }: { title: string; items?: string[] }) {
+  if (!items || items.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="rounded-[8px] border border-[var(--border-soft)] bg-white p-5">
+      <h3 className="font-bold">{title}</h3>
+      <ul className="mt-3 space-y-2 text-sm leading-6 text-[var(--text-muted)]">
+        {items.map((item) => (
+          <li key={item}>{item}</li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function ScoreCard({
+  label,
+  value,
+  suffix = '점',
+}: {
+  label: string;
+  value: number;
+  suffix?: string;
+}) {
+  return (
+    <div className="rounded-[8px] border border-[var(--border-soft)] bg-[var(--card-soft)] px-4 py-4">
+      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--text-muted)]">
         {label}
       </p>
-      <p className="mt-2 text-2xl font-bold">{value}점</p>
+      <p className="mt-2 text-2xl font-bold">
+        {value}
+        {suffix}
+      </p>
     </div>
   );
 }
@@ -649,60 +814,34 @@ function QuestionScoreList({
     feedback: string;
   }[];
 }) {
-  if (items.length === 0) {
-    return null;
+  if (!items || items.length === 0) {
+    return (
+      <div className="rounded-[8px] border border-[var(--border-soft)] bg-white p-5 text-sm text-[var(--text-muted)]">
+        문항별 피드백이 없습니다.
+      </div>
+    );
   }
 
   return (
-    <div>
-      <h3 className="text-lg font-bold">문항별 점수</h3>
-      <div className="mt-3 space-y-3">
-        {items.map((item) => (
-          <div
-            key={`${item.questionNumber}-${item.title}`}
-            className="rounded-2xl border border-[var(--border-soft)] bg-white px-4 py-4"
-          >
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="text-sm font-semibold">{item.title}</p>
-                <p className="mt-2 text-sm leading-6 text-[var(--text-muted)]">
-                  {item.feedback}
-                </p>
-              </div>
-              <p className="shrink-0 text-lg font-bold text-[var(--accent)]">
-                {item.score}점
+    <div className="grid gap-4">
+      {items.map((item) => (
+        <div
+          key={`${item.questionNumber}-${item.title}`}
+          className="rounded-[8px] border border-[var(--border-soft)] bg-white p-5"
+        >
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="font-bold">{item.title}</p>
+              <p className="mt-2 text-sm leading-7 text-[var(--text-muted)]">
+                {item.feedback}
               </p>
             </div>
+            <p className="shrink-0 text-xl font-bold text-[var(--accent)]">
+              {item.score}점
+            </p>
           </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function TrustSummary({
-  confidence,
-  keywords,
-}: {
-  confidence?: number;
-  keywords?: string[];
-}) {
-  return (
-    <div className="mt-4 rounded-2xl border border-[var(--border-soft)] bg-white px-4 py-4">
-      <p className="text-sm font-semibold">근거 신뢰도</p>
-      <p className="mt-2 text-2xl font-bold text-[var(--accent)]">
-        {Math.round((confidence ?? 0) * 100)}%
-      </p>
-      <div className="mt-3 flex flex-wrap gap-2">
-        {(keywords ?? []).slice(0, 8).map((keyword) => (
-          <span
-            key={keyword}
-            className="rounded-full border border-[var(--border-soft)] px-3 py-1 text-xs font-semibold text-[var(--text-muted)]"
-          >
-            {keyword}
-          </span>
-        ))}
-      </div>
+        </div>
+      ))}
     </div>
   );
 }
@@ -713,33 +852,25 @@ function RubricScoreList({ items }: { items?: CoverLetterRubricScore[] }) {
   }
 
   return (
-    <div>
-      <h3 className="text-lg font-bold">항목별 평가 기준</h3>
-      <div className="mt-3 space-y-3">
-        {items.map((item) => (
-          <div
-            key={item.category}
-            className="rounded-2xl border border-[var(--border-soft)] bg-white px-4 py-4"
-          >
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="text-sm font-semibold">
-                  {item.category} · {item.evidenceSource}
-                </p>
-                <p className="mt-2 text-sm leading-6 text-[var(--text-muted)]">
-                  {item.evidenceText}
-                </p>
-                <p className="mt-2 text-xs font-semibold text-[var(--accent)]">
-                  {item.verified ? '입력 문서 근거 확인됨' : '근거 부족으로 감점됨'}
-                </p>
-              </div>
-              <p className="shrink-0 text-lg font-bold text-[var(--accent)]">
-                {item.score}/{item.maxScore}
+    <div className="mt-4 grid gap-3">
+      {items.map((item) => (
+        <div
+          key={item.category}
+          className="rounded-[8px] border border-[var(--border-soft)] bg-white p-4"
+        >
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-sm font-semibold">{item.category}</p>
+              <p className="mt-2 text-sm leading-6 text-[var(--text-muted)]">
+                {item.evidenceText}
               </p>
             </div>
+            <p className="shrink-0 font-bold text-[var(--accent)]">
+              {item.score}/{item.maxScore}
+            </p>
           </div>
-        ))}
-      </div>
+        </div>
+      ))}
     </div>
   );
 }
@@ -750,34 +881,29 @@ function RagEvidenceList({ items }: { items?: CoverLetterRagEvidence[] }) {
   }
 
   return (
-    <div>
-      <h3 className="text-lg font-bold">RAG 검색 근거</h3>
-      <div className="mt-3 space-y-3">
-        {items.slice(0, 5).map((item, index) => (
-          <div
-            key={`${item.source}-${index}`}
-            className="rounded-2xl border border-[var(--border-soft)] bg-white px-4 py-4 text-sm leading-6 text-[var(--text-muted)]"
-          >
-            <p className="font-semibold text-[var(--text)]">
-              {item.source} · 유사도 {item.score}
-            </p>
-            <p className="mt-2">{item.text}</p>
-          </div>
-        ))}
-      </div>
+    <div className="mt-4 grid gap-3">
+      {items.slice(0, 5).map((item, index) => (
+        <div
+          key={`${item.source}-${index}`}
+          className="rounded-[8px] border border-[var(--border-soft)] bg-[var(--card-soft)] p-4 text-sm leading-6 text-[var(--text-muted)]"
+        >
+          <p className="font-semibold text-[var(--text-main)]">
+            {item.source} · 유사도 {item.score}
+          </p>
+          <p className="mt-2">{item.text}</p>
+        </div>
+      ))}
     </div>
   );
 }
 
 function DraftCard({ draft }: { draft: string }) {
   return (
-    <div>
-      <h3 className="text-lg font-bold">자소서 수정 초안</h3>
-      <div className="mt-3 rounded-2xl border border-[var(--border-soft)] bg-white px-4 py-4">
-        <pre className="whitespace-pre-wrap text-sm leading-7 text-[var(--text-muted)]">
-          {draft}
-        </pre>
-      </div>
+    <div className="rounded-[8px] border border-[var(--border-soft)] bg-white p-5">
+      <h3 className="text-xl font-bold">자소서 수정 초안</h3>
+      <pre className="mt-4 max-h-[620px] overflow-auto whitespace-pre-wrap rounded-[8px] bg-[var(--card-soft)] p-5 text-sm leading-7 text-[var(--text-muted)]">
+        {draft || '생성된 수정 초안이 없습니다.'}
+      </pre>
     </div>
   );
 }
