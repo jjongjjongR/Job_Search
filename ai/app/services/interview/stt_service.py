@@ -1,4 +1,5 @@
 import mimetypes
+import logging
 import re
 from pathlib import Path
 
@@ -9,6 +10,7 @@ from app.schemas.common import InterviewDecisionType
 from app.schemas.interview import InterviewAnswerRequest
 
 OPENAI_STT_TIMEOUT_SECONDS = 60.0
+logger = logging.getLogger(__name__)
 
 
 def _contains_core_noun(text: str) -> bool:
@@ -31,10 +33,12 @@ def _resolve_storage_file_path(storage_key: str) -> Path | None:
 # 2026.04.25 신규: answerVideoStorageKey가 있으면 OpenAI STT로 실제 전사를 시도
 def _transcribe_with_openai(storage_key: str) -> str | None:
     if not settings.OPENAI_API_KEY:
+        logger.warning("OpenAI STT skipped because OPENAI_API_KEY is not configured.")
         return None
 
     file_path = _resolve_storage_file_path(storage_key)
     if not file_path or not file_path.exists() or not file_path.is_file():
+        logger.warning("OpenAI STT skipped because uploaded file was not found: %s", storage_key)
         return None
 
     mime_type = mimetypes.guess_type(file_path.name)[0] or "application/octet-stream"
@@ -55,7 +59,8 @@ def _transcribe_with_openai(storage_key: str) -> str | None:
             response.raise_for_status()
         transcript = response.text.strip()
         return transcript or None
-    except Exception:
+    except Exception as error:
+        logger.exception("OpenAI STT failed for uploaded interview answer: %s", error)
         return None
 
 

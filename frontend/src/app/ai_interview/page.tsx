@@ -118,7 +118,8 @@ type BrowserSpeechRecognition = {
   continuous: boolean;
   interimResults: boolean;
   onresult: ((event: SpeechRecognitionEvent) => void) | null;
-  onerror: (() => void) | null;
+  onerror: ((event?: { error?: string }) => void) | null;
+  onend: (() => void) | null;
   start: () => void;
   stop: () => void;
 };
@@ -146,6 +147,7 @@ export default function InterviewPage() {
   const [answerMode, setAnswerMode] = useState<'TEXT' | 'VIDEO'>('TEXT');
   const [answerText, setAnswerText] = useState('');
   const [transcriptHint, setTranscriptHint] = useState('');
+  const [transcriptStatus, setTranscriptStatus] = useState('');
   const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null);
   const [recordedUrl, setRecordedUrl] = useState('');
   // 2026-05-05 신규: 녹화 종료 시점의 실제 길이를 저장해 제출 대기 시간이 영상 길이에 섞이지 않게 함
@@ -286,6 +288,7 @@ export default function InterviewPage() {
 
   const handleStartRecording = async () => {
     setErrorMessage('');
+    setStatusMessage('');
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -298,7 +301,9 @@ export default function InterviewPage() {
       setRecordingHasAudio(stream.getAudioTracks().length > 0);
       // 2026-05-05 수정: 영상 답변 내용을 사용자가 직접 쓰지 않도록 녹화 시작과 동시에 자동 전사를 시작
       setTranscriptHint('');
+      setTranscriptStatus('');
       startBrowserTranscription();
+      speakCurrentQuestionOnce();
       // 2026-05-05 신규: React state 반영 전에도 정확한 녹화 시작 시간을 계산하기 위한 로컬 값
       const recordingStartedAt = Date.now();
       // 2026-05-05 신규: 녹화 중에는 현재 카메라 화면을 바로 보여줌
@@ -544,6 +549,18 @@ export default function InterviewPage() {
     setRecordedUrl('');
   };
 
+  const speakCurrentQuestionOnce = () => {
+    if (!currentQuestion || typeof window === 'undefined' || !window.speechSynthesis) {
+      return;
+    }
+
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(currentQuestion.questionText);
+    utterance.lang = 'ko-KR';
+    utterance.rate = 0.95;
+    window.speechSynthesis.speak(utterance);
+  };
+
   const startBrowserTranscription = () => {
     if (typeof window === 'undefined') {
       return;
@@ -566,6 +583,7 @@ export default function InterviewPage() {
       ).webkitSpeechRecognition;
 
     if (!SpeechRecognitionConstructor) {
+      setTranscriptStatus('이 브라우저는 실시간 자동 전사를 지원하지 않습니다. 제출 후 서버 STT로 전사합니다.');
       return;
     }
 
@@ -579,14 +597,27 @@ export default function InterviewPage() {
         transcript += event.results[index][0].transcript;
       }
       setTranscriptHint(transcript.trim());
+      setTranscriptStatus('실시간 전사 중입니다.');
     };
-    recognition.onerror = () => undefined;
+    recognition.onerror = (event) => {
+      const reason = event?.error ? ` (${event.error})` : '';
+      setTranscriptStatus(`브라우저 실시간 전사가 중단되었습니다${reason}. 제출 후 서버 STT로 전사합니다.`);
+    };
+    recognition.onend = () => {
+      setTranscriptStatus((current) =>
+        transcriptHint.trim() || current.includes('서버 STT')
+          ? current
+          : '브라우저 실시간 전사가 종료되었습니다. 제출 후 서버 STT로 전사합니다.',
+      );
+    };
     speechRecognitionRef.current = recognition;
 
     try {
       recognition.start();
+      setTranscriptStatus('브라우저 실시간 전사를 시작했습니다.');
     } catch {
       speechRecognitionRef.current = null;
+      setTranscriptStatus('브라우저 실시간 전사를 시작하지 못했습니다. 제출 후 서버 STT로 전사합니다.');
     }
   };
 
@@ -615,11 +646,7 @@ export default function InterviewPage() {
     }
 
     // 2026-05-05 신규: 이전 질문 음성이 남아 있으면 멈추고 현재 질문만 읽음
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(currentQuestion.questionText);
-    utterance.lang = 'ko-KR';
-    utterance.rate = 0.95;
-    window.speechSynthesis.speak(utterance);
+    speakCurrentQuestionOnce();
   };
 
   if (!user) {
@@ -857,7 +884,8 @@ export default function InterviewPage() {
                 />
               </label>
               <p className="mt-2 text-sm text-[var(--text-muted)]">
-                자동 전사가 비어 있어도 제출할 수 있고, 서버 STT가 영상을 전사합니다.
+                {transcriptStatus ||
+                  '자동 전사가 비어 있어도 제출할 수 있고, 서버 STT가 영상을 전사합니다.'}
               </p>
               <p className="mt-3 text-sm text-[var(--text-muted)]">
                 영상 재시도 {videoRetryCount}/{MAX_VIDEO_RETRY_COUNT}

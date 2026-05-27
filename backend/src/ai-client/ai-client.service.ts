@@ -28,6 +28,12 @@ export class AiClientService {
   private readonly coverLetterFeedbackTimeoutMs = Number(
     process.env.AI_COVER_LETTER_FEEDBACK_TIMEOUT_MS ?? 180000,
   );
+  // 2026-05-27 수정: 영상 답변은 업로드 파일 STT와 답변 평가가 이어져 기본 30초를 넘길 수 있어 별도 timeout을 둔다.
+  private readonly interviewAnswerTimeoutMs = Number(
+    process.env.AI_INTERVIEW_ANSWER_TIMEOUT_MS ??
+      process.env.AI_INTERNAL_REQUEST_TIMEOUT_MS ??
+      180000,
+  );
   // 2026-04-10 신규: 일시적 실패 시 한 번 더 시도하도록 재시도 횟수 추가
   private readonly retryCount = 1;
 
@@ -44,7 +50,10 @@ export class AiClientService {
 
   async processInterviewAnswer(payload: ProcessInterviewAnswerRequest) {
     // 2026-04-10 수정: FastAPI 실제 라우트 경로인 /answer 로 정정
-    return this.post('/internal/interview/answer', payload);
+    return this.post('/internal/interview/answer', payload, {
+      retryCount: 0,
+      timeoutMs: this.interviewAnswerTimeoutMs,
+    });
   }
 
   async finishInterview(payload: FinishInterviewRequest) {
