@@ -9,9 +9,11 @@ from app.services.cover_letter.shared import (
 # 2026-04-21 신규: 지원자 문서에서 평가 근거와 문항 단위 입력을 정리하는 agent
 def run_evidence_extractor_agent(
     payload: CoverLetterFeedbackRequest,
-    jd_keywords: list[str],
+    jd_keywords: list[str] | dict[str, object],
     rag_context: dict[str, object] | None = None,
 ) -> dict[str, object]:
+    if isinstance(jd_keywords, dict):
+        jd_keywords = list(jd_keywords.get("jdKeywords", []))
     normalized_documents = normalize_documents(payload.documents)
     cover_letter_text = normalized_documents["coverLetterText"]
     resume_text = normalized_documents["resumeText"]

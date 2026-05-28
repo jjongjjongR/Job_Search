@@ -55,6 +55,19 @@ def run_rag_retriever_agent(
         " ".join(list(jd_context["jobFocusKeywords"])[:8]),
         *RAG_QUERY_TEMPLATES,
     ]
+    for requirement in jd_context.get("requirements", []):
+        if not isinstance(requirement, dict):
+            continue
+        queries.append(
+            " ".join(
+                [
+                    str(requirement.get("name", "")),
+                    str(requirement.get("evidenceNeeded", "")),
+                    " ".join(str(item) for item in requirement.get("keywords", [])),
+                    str(requirement.get("sourceText", ""))[:120],
+                ]
+            )
+        )
     retrieved_by_id: dict[str, RagChunk] = {}
     for query in queries:
         if not query.strip():

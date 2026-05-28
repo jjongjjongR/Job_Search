@@ -31,6 +31,24 @@ KEYWORD_STOPWORDS = {
     "기준",
 }
 
+KNOWN_COMPOUND_PHRASES = [
+    "Forward Deployed Engineer",
+    "Fine tuning",
+    "fine tuning",
+    "Machine Learning",
+    "Deep Learning",
+    "Computer Vision",
+    "Prompt Engineering",
+    "문제 해결",
+    "데이터 분석",
+    "산업 현장",
+    "산업현장",
+    "성공 사례",
+    "최신 AI",
+    "최신 AI/LLM",
+    "다양한 라이브러리",
+]
+
 ROLE_SIGNAL_KEYWORDS = [
     "유지보수",
     "운영",
@@ -85,7 +103,36 @@ def normalize_documents(documents: CoverLetterDocumentsInput) -> dict[str, str]:
 # 2026-04-21 신규: JD에서 핵심 토큰을 간단한 규칙으로 추출
 def extract_keywords(jd_text: str, limit: int = 8) -> list[str]:
     keywords: list[str] = []
-    for token in re.findall(r"[A-Za-z][A-Za-z0-9.+#-]{1,}|[가-힣]{2,}", jd_text):
+
+    phrase_candidates: list[str] = []
+    for phrase in KNOWN_COMPOUND_PHRASES:
+        if phrase.lower() in jd_text.lower():
+            phrase_candidates.append(phrase)
+    phrase_candidates.extend(
+        re.findall(
+            r"[A-Za-z][A-Za-z0-9.+#/-]*(?:\s+[A-Za-z][A-Za-z0-9.+#/-]*){1,4}",
+            jd_text,
+        )
+    )
+    phrase_candidates.extend(
+        re.findall(
+            r"[A-Za-z가-힣0-9.+#-]+(?:/[A-Za-z가-힣0-9.+#-]+)+",
+            jd_text,
+        )
+    )
+
+    for phrase in phrase_candidates:
+        normalized_phrase = re.sub(r"\s+", " ", phrase).strip(" ,.;:()[]{}")
+        if len(normalized_phrase) < 3:
+            continue
+        if normalized_phrase.lower() in KEYWORD_STOPWORDS:
+            continue
+        if normalized_phrase not in keywords:
+            keywords.append(normalized_phrase)
+        if len(keywords) >= limit:
+            return keywords
+
+    for token in re.findall(r"[A-Za-z][A-Za-z0-9.+#/-]{1,}|[가-힣]{2,}", jd_text):
         normalized = token.strip()
         if normalized.lower() in KEYWORD_STOPWORDS:
             continue
